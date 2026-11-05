@@ -1,0 +1,18 @@
+{
+  "name": "codex-usage-indicator",
+  "version": "0.0.0-p0.1",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.13",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "build": "bun run tools/build.ts",
+    "probe:app-server": "bun run tools/probes/app-server.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.13",
+    "happy-dom": "20.8.4",
+    "typescript": "5.9.3"
+  }
+}
