@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { spawn } from 'node:child_process'
-import { ReadRpc } from '../tools/probes/rpc'
+import { collectAppServer, ReadRpc } from '../tools/probes/rpc'
 
 function fixture(mode: string, timeout = 1000) {
   const child = spawn(process.execPath, ['run', 'tests/fixtures/rpc-server.ts', mode], { stdio: 'pipe' })
@@ -38,4 +38,17 @@ test('单飞约束且关闭会终止挂起请求', async () => {
   await expect(rpc.call('initialize', {})).rejects.toHaveProperty('code', 'protocol')
   await rpc.close()
   expect(await pending).toHaveProperty('code', 'exit')
+})
+test('完整探针输出白名单并关闭进程', async () => {
+  const { child, rpc } = fixture('ok')
+  const result = await collectAppServer(rpc)
+  expect(result.normalized.coverage).toBe('weekly-only')
+  expect(result.identity).toBe('desktop-comparison-required')
+  expect(JSON.stringify(result)).not.toMatch(/PRIVATE|SECRET|email|accountId/)
+  expect(child.exitCode !== null || child.signalCode !== null).toBe(true)
+})
+test('采样中切换账号作废整份输出', async () => {
+  const { child, rpc } = fixture('switch')
+  await expect(collectAppServer(rpc)).rejects.toHaveProperty('code', 'account-changed')
+  expect(child.exitCode !== null || child.signalCode !== null).toBe(true)
 })

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "local.codex-usage-indicator-probe",
+  "name": "用量指示器 P0 验证探针",
+  "version": "0.0.0-p0.1",
+  "description": "手动启用的只读额度及安全挂载探针，尚非正式用量插件。",
+  "author": "Codex Usage Indicator contributors",
+  "main": "index.js",
+  "scope": "renderer",
+  "runAt": "document-end",
+  "documentation": "README.md",
+  "settings": { "mode": "none" },
+  "permissions": ["dom"]
+}

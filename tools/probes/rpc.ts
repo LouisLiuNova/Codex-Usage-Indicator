@@ -8,9 +8,13 @@ export class ProbeError extends Error {
 
 /** Finite, single-flight, read-only protocol. Raw stderr/errors/identities are never exported. */
 export async function probeAppServer(command = 'codex', timeoutMs = 15_000) {
-  const requestedAt = Math.floor(Date.now() / 1000)
   const child = spawn(command, ['app-server', '--listen', 'stdio://'], { stdio: 'pipe', windowsHide: true })
   const rpc = new ReadRpc(child, timeoutMs)
+  return collectAppServer(rpc)
+}
+
+export async function collectAppServer(rpc: ReadRpc) {
+  const requestedAt = Math.floor(Date.now() / 1000)
   try {
     await rpc.call('initialize', { clientInfo: { name: 'codex_usage_indicator_probe', version: '0.0.0-p0.1' },
       capabilities: { experimentalApi: false } })
@@ -22,7 +26,8 @@ export async function probeAppServer(command = 'codex', timeoutMs = 15_000) {
     const identity = (v: unknown) => record(v) && record(v.account) && v.account.type === 'chatgpt'
       ? v.account : null
     const a = identity(before), b = identity(after)
-    if (!a || !b) throw new ProbeError('account-unconfirmed')
+    if (!a || !b || typeof a.email !== 'string' || !a.email || typeof b.email !== 'string' || !b.email)
+      throw new ProbeError('account-unconfirmed')
     // This bounds a local probe session; it is not proof of Desktop/Renderer identity equality.
     if (a.email !== b.email || a.planType !== b.planType || a.workspaceName !== b.workspaceName)
       throw new ProbeError('account-changed')

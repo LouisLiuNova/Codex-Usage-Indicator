@@ -1,0 +1,110 @@
+export interface HttpClient { safeGet(path: string): Promise<unknown>; makeRequest: (...args: never[]) => unknown }
+export class CapabilityError extends Error {
+  constructor(readonly code: 'origin' | 'missing' | 'ambiguity' | 'timeout' | 'request') { super(code) }
+}
+
+function data(value: object, key: string): unknown {
+  return Object.getOwnPropertyDescriptor(value, key)?.value
+}
+function method(value: object, key: string): boolean {
+  let current: object | null = value
+  for (let depth = 0; current && current !== Object.prototype && depth < 6; depth++) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, key)
+    if (descriptor) return typeof descriptor.value === 'function'
+    current = Object.getPrototypeOf(current)
+  }
+  return false
+}
+const object = (v: unknown): v is object => v !== null && (typeof v === 'object' || typeof v === 'function')
+
+/** Inspect data descriptors and already cached exports; never invoke getters or module factories. */
+export function clientsFromModule(module: unknown): HttpClient[] {
+  const found = new Set<HttpClient>()
+  const queue: unknown[] = [module]
+  const seen = new Set<object>()
+  for (let i = 0; i < queue.length && i < 256; i++) {
+    const value = queue[i]
+    if (!object(value) || seen.has(value)) continue
+    seen.add(value)
+    try {
+      if (method(value, 'safeGet') && method(value, 'makeRequest')) found.add(value as HttpClient)
+      for (const key of Object.getOwnPropertyNames(value).slice(0, 256)) {
+        const exported = data(value, key)
+        if (!object(exported)) continue
+        if (method(exported, 'safeGet') && method(exported, 'makeRequest')) found.add(exported as HttpClient)
+        if (typeof exported !== 'function') continue
+        const cache = data(exported, 'c'), factories = data(exported, 'm')
+        if (!object(cache) || !object(factories)) continue
+        for (const id of Object.getOwnPropertyNames(cache).slice(0, 256)) {
+          const entry = data(cache, id)
+          if (object(entry)) queue.push(data(entry, 'exports'))
+        }
+      }
+    } catch { /* unsupported proxy/module: leave it unselected */ }
+  }
+  return [...found]
+}
+
+export function appModuleUrl(value: string, base: string): string | null {
+  try {
+    const host = new URL(base), url = new URL(value, host)
+    return host.protocol === 'app:' && url.protocol === 'app:' && url.host === host.host
+      && !url.username && !url.password && !url.search && !url.hash && /\.m?js$/i.test(url.pathname) ? url.href : null
+  } catch { return null }
+}
+
+export function resourceUrls(doc: Document, perf: Pick<Performance, 'getEntriesByType'>, base: string): string[] {
+  const found = new Set<string>()
+  const add = (v: string) => { const url = appModuleUrl(v, base); if (url && found.size < 96) found.add(url) }
+  doc.querySelectorAll<HTMLScriptElement | HTMLLinkElement>('script[src], link[rel="modulepreload"][href]')
+    .forEach(node => add(node.getAttribute('src') ?? node.getAttribute('href') ?? ''))
+  for (const entry of perf.getEntriesByType('resource'))
+    if ((entry as PerformanceResourceTiming).initiatorType === 'script') add(entry.name)
+  return [...found]
+}
+
+export function deadline<T>(operation: Promise<T>, signal: AbortSignal, ms = 10_000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', abort) }
+    const abort = () => { finish(); reject(new CapabilityError('timeout')) }
+    const timer = setTimeout(abort, ms)
+    signal.addEventListener('abort', abort, { once: true })
+    if (signal.aborted) { abort(); return }
+    operation.then(value => { finish(); resolve(value) }, error => { finish(); reject(error) })
+  })
+}
+
+export async function discoverClients(urls: string[], load: (url: string) => Promise<unknown>, base: string,
+  signal: AbortSignal, readEntry?: (url: string) => Promise<string>): Promise<HttpClient[]> {
+  if (new URL(base).protocol !== 'app:') throw new CapabilityError('origin')
+  const queue = [...new Set(urls.map(v => appModuleUrl(v, base)).filter((v): v is string => v !== null))].slice(0, 96)
+  const seen = new Set<string>()
+  const found = new Set<HttpClient>()
+  for (let i = 0; i < queue.length && i < 96; i++) {
+    if (signal.aborted) throw new CapabilityError('timeout')
+    const url = queue[i]!
+    if (seen.has(url)) continue
+    seen.add(url)
+    if (readEntry && /\/(?:index|app-main)-[^/]+\.js$/.test(new URL(url).pathname)) {
+      try {
+        const text = await deadline(readEntry(url), signal, 5000)
+        for (const match of text.slice(0, 4_194_304).matchAll(/(?:\.\/|\/)?(?:assets\/)?app-(?:main|initial|primary|shared)-[A-Za-z0-9_-]+\.js/g)) {
+          const dependency = appModuleUrl(match[0], url)
+          if (dependency && !queue.includes(dependency) && queue.length < 96) queue.push(dependency)
+        }
+      } catch { /* importing known entries can still succeed */ }
+    }
+    try {
+      const module = await deadline(load(url), signal)
+      for (const client of clientsFromModule(module)) found.add(client)
+    } catch { /* no raw exception output */ }
+  }
+  return [...found]
+}
+
+export async function readUsage(clients: HttpClient[], signal: AbortSignal) {
+  // No retries across multiple authenticated clients: an ambiguous context is unsafe.
+  if (clients.length !== 1) throw new CapabilityError(clients.length ? 'ambiguity' : 'missing')
+  try { return await deadline(clients[0]!.safeGet('/wham/usage'), signal) }
+  catch (e) { throw e instanceof CapabilityError ? e : new CapabilityError('request') }
+}
