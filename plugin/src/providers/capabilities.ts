@@ -21,14 +21,18 @@ const object = (v: unknown): v is object => v !== null && (typeof v === 'object'
  * Only zero-argument live-binding getters that return a single identifier are accepted.
  * Budget exhaustion rejects the entire scan, so partial results cannot establish uniqueness.
  */
-export function clientsFromRspack(module: unknown): HttpClient[] {
+export function clientsFromRspack(module: unknown, strictBudget = false): HttpClient[] {
   if (!object(module)) return []
   const runtime = data(module, '__webpack_require__')
   if (typeof runtime !== 'function') return []
   const cache = data(runtime, 'c'), factories = data(runtime, 'm')
   if (!object(cache) || !object(factories)) return []
   const ids = Object.getOwnPropertyNames(cache)
-  if (ids.length > 16_384) return []
+  const exhausted = (): HttpClient[] => {
+    if (strictBudget) throw new CapabilityError('ambiguity')
+    return []
+  }
+  if (ids.length > 16_384) return exhausted()
   let budget = 131_072
   const clients = new Set<HttpClient>()
   const inspect = (value: unknown) => {
@@ -43,7 +47,7 @@ export function clientsFromRspack(module: unknown): HttpClient[] {
       // Rspack also caches transpiled live bindings without __esModule; skip the Window export itself.
       if (exports === globalThis) continue
       for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(exports))) {
-        if (--budget < 0) return []
+        if (--budget < 0) return exhausted()
         let value: unknown = descriptor.value
         if (descriptor.get) {
           const source = Function.prototype.toString.call(descriptor.get)
@@ -52,7 +56,10 @@ export function clientsFromRspack(module: unknown): HttpClient[] {
         }
         inspect(value)
       }
-    } catch { /* unsupported proxy/module: reject it without executing factories */ }
+    } catch (error) {
+      if (error instanceof CapabilityError) throw error
+      // Unsupported proxy/module: reject it without executing factories.
+    }
   }
   return [...clients]
 }
@@ -137,8 +144,12 @@ export async function discoverClients(urls: string[], load: (url: string) => Pro
     try {
       const module = await deadline(load(url), signal)
       for (const client of clientsFromModule(module)) found.add(client)
-      for (const client of clientsFromRspack(module)) found.add(client)
-    } catch { /* no raw exception output */ }
+      for (const client of clientsFromRspack(module, true)) found.add(client)
+    } catch (error) {
+      // A rejected full scan cannot fall back to candidates from the partial legacy scan.
+      if (error instanceof CapabilityError && error.code === 'ambiguity') throw error
+      // No raw exception output.
+    }
   }
   return [...found]
 }

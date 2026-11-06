@@ -56,3 +56,17 @@ test('导出预算耗尽后不能将先找到的客户端视作唯一', () => {
   for (let i = 0; i < 131_072; i++) Object.defineProperty(exports, 'x' + i, { enumerable: true, get: () => value })
   expect(clientsFromRspack(runtime({ a: live(client), b: { exports } }).module)).toEqual([])
 })
+test.each(['modules', 'exports'] as const)('完整入口在%s预算耗尽时拒绝旧扫描的部分候选', async kind => {
+  const cache: Record<string, unknown> = { first: { exports: client } }
+  if (kind === 'modules') {
+    for (let i = 0; i < 16_384; i++) cache['x' + i] = { exports: null }
+  } else {
+    const exports: Record<string, null> = {}
+    for (let i = 0; i < 131_072; i++) exports['x' + i] = null
+    cache.large = { exports }
+  }
+  cache.last = { exports: { ...client } }
+  const r = runtime(cache), url = 'app://-/assets/budget.js'
+  await expect(discoverClients([url], async () => r.module, url, new AbortController().signal)).rejects.toHaveProperty('code', 'ambiguity')
+  expect(r.invoked()).toBe(false)
+})
