@@ -55,6 +55,14 @@ if (mode === '--check') {
   while ((await listWindowsCodexProcesses(packageInfo)).length && Date.now() < until)
     await new Promise(resolve => setTimeout(resolve, 1000))
   if ((await listWindowsCodexProcesses(packageInfo)).length) {
+    // Request normal closure of the package process tree; deliberately omit /F.
+    state({ status: 'closing-process-tree', workerPid: process.pid, targetPid })
+    spawnSync('taskkill.exe', ['/PID', String(targetPid), '/T'], { windowsHide: true, timeout: 10_000, stdio: 'ignore' })
+    const treeUntil = Date.now() + 15_000
+    while ((await listWindowsCodexProcesses(packageInfo)).length && Date.now() < treeUntil)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+  if ((await listWindowsCodexProcesses(packageInfo)).length) {
     state({ status: 'close-timeout', workerPid: process.pid }); process.exit(1)
   }
   state({ status: 'starting-loader', workerPid: process.pid })
