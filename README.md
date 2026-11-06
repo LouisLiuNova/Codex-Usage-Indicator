@@ -24,6 +24,7 @@ bun run probe:app-server
 - [原方案逐项验收矩阵](docs/验收矩阵.md)
 - [探针运行与卸载说明](tools/probes/README.md)
 - [Windows P0 实测报告](docs/compatibility/windows-x64-p0.md)
+- [macOS Apple Silicon 加载与实测](docs/compatibility/macos-arm64.md)
 - [开发包与Loader注册表检查](docs/compatibility/package-contract.md)
 - [Chromium生命周期夹具](docs/compatibility/browser-fixture.md)
 - [Windows后台稳定性记录](docs/compatibility/windows-x64-stability.md)
