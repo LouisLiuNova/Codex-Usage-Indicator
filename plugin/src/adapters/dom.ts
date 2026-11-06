@@ -48,7 +48,11 @@ export function inspectAnchor(doc: Document, kind: 'composer' | 'rail', reserved
   const r = node.getBoundingClientRect(), view = doc.defaultView!
   if (r.left < 0 || r.top < 0 || r.right > view.innerWidth || r.bottom > view.innerHeight) return result('space')
   if (kind === 'composer') {
-    const editors = [...node.querySelectorAll<HTMLElement>('[contenteditable="true"][role="textbox"], textarea')].filter(visible)
+    const marked = [...node.querySelectorAll<HTMLElement>('[data-codex-composer]')]
+    // Native goal/accessory editors may share this outer root. Prefer the explicit prompt marker;
+    // a present but hidden/invalid marker must never fall back to an unrelated editor.
+    const editors = (marked.length ? marked.filter(el => el.matches('[contenteditable="true"][role="textbox"],textarea'))
+      : [...node.querySelectorAll<HTMLElement>('[contenteditable="true"][role="textbox"], textarea')]).filter(visible)
     if (editors.length !== 1 || !node.parentElement || node.closest('[contenteditable="true"]')) return result('structure')
     // Marker is a new sibling region; require visible free space below the existing native region.
     const next = node.nextElementSibling?.getBoundingClientRect()

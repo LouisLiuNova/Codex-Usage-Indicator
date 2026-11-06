@@ -107,6 +107,22 @@ describe('挂载前置条件与生命周期', () => {
     expect(inspectAnchor(doc, 'rail').code).toBe('space')
     win.close()
   })
+  test.each(['primary', 'hidden-primary', 'two-primary', 'invalid-primary', 'unmarked'] as const)('原生编辑器语义标记 %s 不与辅助编辑区混淆', mode => {
+    const { win, doc, box } = dom()
+    const root = doc.querySelector<HTMLElement>('[data-codex-composer-root]')!
+    const primary = doc.querySelector('textarea')!
+    if (mode !== 'unmarked') primary.dataset.codexComposer = ''
+    if (mode === 'hidden-primary') primary.hidden = true
+    if (mode === 'invalid-primary') {
+      primary.removeAttribute('data-codex-composer')
+      const invalid = doc.createElement('span'); invalid.dataset.codexComposer = ''; root.append(invalid)
+    }
+    const auxiliary = doc.createElement('div'); auxiliary.contentEditable = 'true'; auxiliary.setAttribute('role', 'textbox')
+    root.append(auxiliary); box(auxiliary, 210, 570, 400, 24)
+    if (mode === 'two-primary') auxiliary.dataset.codexComposer = ''
+    expect(inspectAnchor(doc, 'composer').code).toBe(mode === 'primary' ? 'ready' : 'structure')
+    win.close()
+  })
   test('rail 增长区域空白可收缩，插入 footer 前且不撑宽原生 rail', () => {
     const { win, doc, box } = dom()
     const nav = doc.querySelector<HTMLElement>('nav')!
