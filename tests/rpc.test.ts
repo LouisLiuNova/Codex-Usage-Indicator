@@ -21,7 +21,9 @@ test('握手、通知、分块行、多余请求与只读额度', async () => {
   await expect(rpc.call('initialize', {})).rejects.toHaveProperty('code', 'exit')
 })
 test.each([['hang', 'timeout'], ['exit', 'exit'], ['malformed', 'protocol'], ['oversize', 'protocol'], ['rpc-error', 'rpc']])('%s 安全归类 %s', async (mode, code) => {
-  const { child, rpc } = fixture(mode, 200)
+  // Only the hanging-server case measures a short deadline. Other cases classify protocol errors,
+  // and must allow the real child runtime to start on a busy host.
+  const { child, rpc } = fixture(mode, mode === 'hang' ? 200 : 1500)
   try { await expect(rpc.call('initialize', {})).rejects.toHaveProperty('code', code) }
   finally { await rpc.close() }
   expect(child.exitCode !== null || child.signalCode !== null).toBe(true)
