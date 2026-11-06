@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { GlobalWindow as Window } from 'happy-dom'
 import { appModuleUrl, clientsFromModule, deadline, discoverClients, readUsage, resourceUrls } from '../tools/probes/renderer-capabilities'
-import { inspectAnchor, mountMarker } from '../tools/probes/anchors'
+import { inspectAnchor, mountContent, mountMarker, type SlotChecks } from '../tools/probes/anchors'
 import { runInNewContext } from 'node:vm'
 
 describe('能力发现边界', () => {
@@ -167,6 +167,40 @@ describe('挂载前置条件与生命周期', () => {
     box(input, 200, 620, 100, 40)
     expect(mountMarker(inspectAnchor(doc, 'composer'))).toBeNull()
     expect(doc.querySelectorAll('[data-cui-probe]').length).toBe(0)
+    win.close()
+  })
+  test.each([false, true])('文字栏装饰重叠允许，但可交互区域侵入原生按钮 %p 时必须撤销', intrudes => {
+    const win = new Window({ width: 900, height: 800 })
+    const doc = win.document as unknown as Document
+    doc.body.innerHTML = '<section><div data-thread-scroll-footer="true"><main data-thread-find-composer="true" style="display:flex;flex-direction:column"><div data-codex-composer-root><textarea></textarea><button type="button">native</button></div></main></div></section>'
+    const root = doc.querySelector<HTMLElement>('[data-codex-composer-root]')!
+    const rect = (left: number, top: number, width: number, height: number) =>
+      ({ x: left, y: top, left, top, width, height, right: left + width, bottom: top + height, toJSON() {} })
+    doc.querySelector('section')!.getBoundingClientRect = () => rect(200, 96, 600, 684)
+    const offset = () => {
+      const slot = doc.querySelector<HTMLElement>('[data-cui-slot=composer]')
+      return slot ? parseFloat(slot.style.height) + 8 + parseFloat(slot.style.marginBlockStart || '0') : 0
+    }
+    root.getBoundingClientRect = () => rect(200, 640 - offset(), 600, 130)
+    doc.querySelector('textarea')!.getBoundingClientRect = () => rect(210, 650 - offset(), 580, 40)
+    doc.querySelector('button')!.getBoundingClientRect = () => rect(760, 770 - offset() - (intrudes ? 15 : 28), 20, 20)
+    const create = doc.createElement.bind(doc)
+    doc.createElement = ((tag: string, options?: ElementCreationOptions) => {
+      const el = create(tag, options)
+      if (tag === 'div') el.getBoundingClientRect = () => rect(200, root.getBoundingClientRect().bottom + 8 + parseFloat(el.style.marginBlockStart || '0'), 600, parseFloat(el.style.height || '0'))
+      return el
+    }) as typeof doc.createElement
+    const content = create('div')
+    let rejection: SlotChecks | undefined
+    const mounted = mountContent(inspectAnchor(doc, 'composer', 32), content, 44, 12, checks => { rejection = checks })
+    expect(!!mounted).toBe(!intrudes)
+    if (mounted) {
+      expect(root.getBoundingClientRect().bottom - mounted.root.getBoundingClientRect().top).toBe(12)
+      expect(mounted.root.style.pointerEvents).toBe('none')
+      mounted.stop()
+    } else expect(rejection?.overlappingControls).toBeGreaterThan(0)
+    expect(doc.querySelector('[data-cui-slot]')).toBeNull()
+    expect(root.getBoundingClientRect().top).toBe(640)
     win.close()
   })
   test('隐藏编辑器不参与唯一性判断', () => {

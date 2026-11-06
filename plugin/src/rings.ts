@@ -1,14 +1,18 @@
 import type { UsageSnapshot } from './store'
-import { displayPercent, labels, names, warning, type WindowKind } from './presentation'
+import { connectionLabel, displayPercent, labels, names, warning, type WindowKind } from './presentation'
 
 export class RingView {
   readonly root: HTMLDivElement
   private entries = new Map<WindowKind, { button: HTMLButtonElement; percent: HTMLSpanElement; circle: SVGCircleElement | null; dispose: () => void }>()
+  private status: HTMLSpanElement
   constructor(private doc: Document, private bind: (button: HTMLButtonElement) => () => void, readonly location: 'composer' | 'rail') {
     this.root = doc.createElement('div')
     this.root.className = `cui-rings cui-${location}`
     this.root.dataset.cuiView = location
+    this.status = doc.createElement('span'); this.status.className = 'cui-muted cui-empty'
   }
+  get preferredHeight() { return this.location === 'composer' ? 44 : this.entries.size ? this.entries.size * 50 + (this.entries.size - 1) * 8 : 28 }
+  get preferredOverlap() { return this.location === 'composer' ? 12 : 0 }
   update(snapshot: Readonly<UsageSnapshot>) {
     let restoreFocus = false
     for (const kind of ['fiveHour', 'weekly'] as const) {
@@ -56,6 +60,8 @@ export class RingView {
       entry.button.title = warning(value)
     }
     this.root.dataset.count = String(this.entries.size)
+    this.status.remove()
+    if (!this.entries.size) { this.status.textContent = connectionLabel(snapshot); this.root.append(this.status) }
     // Startup/failure is not evidence that the server removed a window. No fabricated windows.
     this.root.setAttribute('aria-label', this.entries.size ? '额度指示器' : snapshot.connection === 'connecting' ? '用量连接中' : '用量暂不可用')
     if (restoreFocus) this.entries.values().next().value?.button.focus()
