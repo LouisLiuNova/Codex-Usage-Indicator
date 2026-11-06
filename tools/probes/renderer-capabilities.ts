@@ -17,6 +17,46 @@ function method(value: object, key: string): boolean {
 }
 const object = (v: unknown): v is object => v !== null && (typeof v === 'object' || typeof v === 'function')
 
+/** Rspack ESM runtime: inspect already cached exports, never run module factories.
+ * Only zero-argument live-binding getters that return a single identifier are accepted.
+ * Budget exhaustion rejects the entire scan, so partial results cannot establish uniqueness.
+ */
+export function clientsFromRspack(module: unknown): HttpClient[] {
+  if (!object(module)) return []
+  const runtime = data(module, '__webpack_require__')
+  if (typeof runtime !== 'function') return []
+  const cache = data(runtime, 'c'), factories = data(runtime, 'm')
+  if (!object(cache) || !object(factories)) return []
+  const ids = Object.getOwnPropertyNames(cache)
+  if (ids.length > 16_384) return []
+  let budget = 131_072
+  const clients = new Set<HttpClient>()
+  const inspect = (value: unknown) => {
+    if (object(value) && method(value, 'safeGet') && method(value, 'makeRequest')) clients.add(value as HttpClient)
+  }
+  for (const id of ids) {
+    try {
+      const entry = data(cache, id)
+      const exports = object(entry) ? data(entry, 'exports') : null
+      if (!object(exports)) continue
+      inspect(exports)
+      // Rspack also caches transpiled live bindings without __esModule; skip the Window export itself.
+      if (exports === globalThis) continue
+      for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(exports))) {
+        if (--budget < 0) return []
+        let value: unknown = descriptor.value
+        if (descriptor.get) {
+          const source = Function.prototype.toString.call(descriptor.get)
+          if (!/^\(\s*\)\s*=>\s*[A-Za-z_$][\w$]*\s*$/.test(source)) continue
+          try { value = descriptor.get.call(exports) } catch { continue }
+        }
+        inspect(value)
+      }
+    } catch { /* unsupported proxy/module: reject it without executing factories */ }
+  }
+  return [...clients]
+}
+
 /** Inspect data descriptors and already cached exports; never invoke getters or module factories. */
 export function clientsFromModule(module: unknown): HttpClient[] {
   const found = new Set<HttpClient>()
@@ -97,6 +137,7 @@ export async function discoverClients(urls: string[], load: (url: string) => Pro
     try {
       const module = await deadline(load(url), signal)
       for (const client of clientsFromModule(module)) found.add(client)
+      for (const client of clientsFromRspack(module)) found.add(client)
     } catch { /* no raw exception output */ }
   }
   return [...found]
