@@ -1,10 +1,11 @@
-import { inspectAnchor, mountContent, type AnchorResult } from './adapters/dom'
+import { inspectAnchor, mountContent, visible, type AnchorResult } from './adapters/dom'
 import { RingView } from './rings'
 import type { SharedPopover } from './popover'
 import type { UsageStore } from './store'
 
 const selectors = '[data-codex-composer-root],nav[data-app-navigation-rail]'
 const own = '[data-cui-slot],[data-cui-view],.cui-popover,style[data-cui-style]'
+const attributes = ['hidden', 'inert', 'aria-hidden', 'style', 'class', 'data-codex-composer-root', 'data-app-navigation-rail']
 type Slot = NonNullable<ReturnType<typeof mountContent>>
 interface Binding { kind: 'composer' | 'rail'; view: RingView; slot: Slot | null; target: HTMLElement | null; height: number; code: AnchorResult['code'] }
 
@@ -13,6 +14,7 @@ export class MountManager {
   private observer: MutationObserver
   private resize: ResizeObserver | undefined
   private dimensions = new Map<Element, { width: number; height: number }>()
+  private candidates: HTMLElement[] = []
   private timer: ReturnType<typeof setTimeout> | undefined
   private force = false
   private stopped = false
@@ -48,7 +50,8 @@ export class MountManager {
   private affectsLayout(record: MutationRecord) {
     const win = this.doc.defaultView!
     if (record.target instanceof win.Element && record.target.closest(own)) return false
-    if (record.type === 'attributes') return this.bindings.some(b => b.target && record.target instanceof win.Element && record.target.contains(b.target))
+    if (record.type === 'attributes') return record.target instanceof win.Element
+      && (record.target.matches(selectors) || this.candidates.some(node => record.target instanceof win.Element && record.target.contains(node)))
     return [...record.addedNodes, ...record.removedNodes].some(node => {
       if (!(node instanceof win.Element) || node.matches(own)) return false
       return node.matches(selectors) || !!node.querySelector(selectors) || this.bindings.some(b => b.target && node.contains(b.target))
@@ -64,10 +67,14 @@ export class MountManager {
     if (this.stopped) return
     const force = this.force; this.force = false
     this.scans++
+    // Ordinary sampling must still reject a newly ambiguous or hidden native anchor.
+    const live = [...this.doc.querySelectorAll<HTMLElement>(selectors)].filter(visible)
     for (const binding of this.bindings) {
       const height = binding.view.preferredHeight
       const rect = binding.target?.getBoundingClientRect()
-      if (!force && binding.slot?.root.isConnected && binding.target?.isConnected && rect && rect.width > 0 && rect.height > 0 && height === binding.height) continue
+      const matches = live.filter(node => node.matches(binding.kind === 'composer' ? '[data-codex-composer-root]' : 'nav[data-app-navigation-rail]'))
+      if (!force && binding.slot?.root.isConnected && binding.target?.isConnected && rect && rect.width > 0 && rect.height > 0
+        && height === binding.height && matches.length === 1 && matches[0] === binding.target) continue
       const focused = binding.view.root.contains(this.doc.activeElement) ? this.doc.activeElement as HTMLElement : null
       binding.slot?.stop(); binding.slot = null; binding.target = null
       try {
@@ -86,16 +93,20 @@ export class MountManager {
   private watch() {
     this.observer.disconnect(); this.resize?.disconnect(); this.dimensions.clear()
     if (this.stopped) return
+    this.candidates = [...this.doc.querySelectorAll<HTMLElement>(selectors)]
     const targets = this.bindings.map(b => b.target).filter((node): node is HTMLElement => !!node)
     if (targets.length < 2) {
-      this.observer.observe(this.doc.body ?? this.doc.documentElement, { childList: true, subtree: true })
+      const base = this.doc.body ?? this.doc.documentElement
+      this.observer.observe(base, { childList: true, subtree: true, attributes: true, attributeFilter: attributes })
+      if (base !== this.doc.documentElement) this.observer.observe(this.doc.documentElement,
+        { childList: true, attributes: true, attributeFilter: attributes })
     } else {
       // Watch each ancestor's direct children. Replacing any containing branch is observed,
       // while ordinary message content and plugin-owned mutations are not scanned.
       const ancestors = new Set<Element>()
       for (const target of targets) for (let node: Element | null = target; node; node = node.parentElement) ancestors.add(node)
       for (const node of ancestors) this.observer.observe(node, { childList: true, attributes: true,
-        attributeFilter: ['hidden', 'inert', 'aria-hidden', 'style', 'class'] })
+        attributeFilter: attributes })
     }
     for (const target of targets) {
       const rect = target.getBoundingClientRect()
@@ -110,7 +121,7 @@ export class MountManager {
     this.stopped = true
     if (this.timer !== undefined) clearTimeout(this.timer)
     this.timer = undefined
-    this.observer.disconnect(); this.resize?.disconnect(); this.dimensions.clear(); this.unsubscribe()
+    this.observer.disconnect(); this.resize?.disconnect(); this.dimensions.clear(); this.candidates = []; this.unsubscribe()
     this.doc.defaultView!.removeEventListener('resize', this.onResize)
     for (const binding of this.bindings) { binding.view.stop(); binding.slot?.stop(); binding.slot = null; binding.target = null }
   }

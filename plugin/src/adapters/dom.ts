@@ -1,6 +1,6 @@
 export type AnchorCode = 'ready' | 'missing' | 'ambiguity' | 'space' | 'overlay' | 'structure'
 export interface AnchorResult { kind: 'composer' | 'rail'; code: AnchorCode; candidates: number; adapter: string; target: HTMLElement | null }
-function visible(element: HTMLElement): boolean {
+export function visible(element: HTMLElement): boolean {
   const style = element.ownerDocument.defaultView!.getComputedStyle(element)
   const r = element.getBoundingClientRect()
   return element.isConnected && !element.closest('[hidden], [inert], [aria-hidden="true"]')
