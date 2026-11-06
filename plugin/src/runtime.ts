@@ -1,6 +1,7 @@
 import { UsageStore } from './store'
 import { RefreshScheduler, type Clock, type UsageProvider } from './scheduler'
 import { WhamProvider } from './providers/wham'
+import { discoverClients, resourceUrls } from './providers/capabilities'
 import { SharedPopover, type Positioner } from './popover'
 import { MountManager } from './mounts'
 import { styles } from './styles'
@@ -35,7 +36,8 @@ export function createRuntime(doc: Document, options: { read?: UsageProvider; cl
     ;(doc.head ?? doc.documentElement).append(style)
     popover = new SharedPopover(doc, store, options.position)
     mounts = new MountManager(doc, store, popover)
-    provider = new WhamProvider({ document: doc, performance: win.performance, href: win.location.href, load: url => import(url) },
+    provider = new WhamProvider(signal => discoverClients(resourceUrls(doc, win.performance, win.location.href),
+      url => import(url), win.location.href, signal),
       () => { if (active) void scheduler?.changeContext() })
     const read = options.read ?? (signal => provider!.read(signal))
     scheduler = new RefreshScheduler(store, async signal => { requests++; return read(signal) }, options.clock)

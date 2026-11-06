@@ -1,6 +1,6 @@
 import { normalize, record, type NormalizedUsage } from '../usage'
 import { UsageRequestError } from '../scheduler'
-import { CapabilityError, deadline, discoverClients, resourceUrls, type HttpClient } from './capabilities'
+import { CapabilityError, deadline, type HttpClient } from './capabilities'
 
 /** Error projection never retains server messages, response bodies or account identifiers. */
 export function requestError(error: unknown, now = Date.now()): UsageRequestError {
@@ -23,12 +23,7 @@ export function requestError(error: unknown, now = Date.now()): UsageRequestErro
   return new UsageRequestError(status, retryAfterMs)
 }
 
-export interface WhamEnvironment {
-  document: Document
-  performance: Pick<Performance, 'getEntriesByType'>
-  href: string
-  load(url: string): Promise<unknown>
-}
+export type ClientDiscovery = (signal: AbortSignal) => Promise<HttpClient[]>
 
 export class WhamProvider {
   private clients: Promise<HttpClient[]> | undefined
@@ -36,7 +31,7 @@ export class WhamProvider {
   private identity: string | null = null
   private blocked = false
   private stopped = false
-  constructor(private environment: WhamEnvironment, private onIdentityChanged: () => void = () => {}) {}
+  constructor(private discover: ClientDiscovery, private onIdentityChanged: () => void = () => {}) {}
   /** Host ownership uncertainty clears discovery and blocks reads until a confirmed foreground entry. */
   invalidate(block = false) {
     this.epoch++; this.clients = undefined; this.identity = null; this.blocked = block
@@ -45,9 +40,8 @@ export class WhamProvider {
   async read(signal: AbortSignal): Promise<NormalizedUsage> {
     if (this.stopped || this.blocked || signal.aborted) throw new UsageRequestError()
     const epoch = this.epoch
-    const env = this.environment
     try {
-      this.clients ??= discoverClients(resourceUrls(env.document, env.performance, env.href), env.load, env.href, signal)
+      this.clients ??= this.discover(signal)
       const clients = await this.clients
       if (signal.aborted || epoch !== this.epoch || this.stopped) throw new UsageRequestError()
       if (clients.length !== 1) throw new CapabilityError(clients.length ? 'ambiguity' : 'missing')
