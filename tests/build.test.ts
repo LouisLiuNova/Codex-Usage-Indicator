@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -21,5 +21,13 @@ test('App Server bundle 可由 Node 执行且错误脱敏', async () => {
     expect(run.status).toBe(1)
     expect(JSON.parse(run.stdout)).toEqual({ schemaVersion: 1, provider: 'app-server', status: 'failed', code: 'spawn' })
     expect(run.stdout + run.stderr).not.toContain('PRIVATE')
+    if (process.platform !== 'win32') {
+      // Node resolves the module URL, but keeps the symlink spelling in argv[1].
+      await symlink(join(dir, 'probe.mjs'), join(dir, 'linked.mjs'))
+      const linked = spawnSync('node', [join(dir, 'linked.mjs'), '/missing/PRIVATE'], { encoding: 'utf8', timeout: 3000 })
+      expect(linked.status).toBe(1)
+      expect(JSON.parse(linked.stdout)).toEqual({ schemaVersion: 1, provider: 'app-server', status: 'failed', code: 'spawn' })
+      expect(linked.stdout + linked.stderr).not.toContain('PRIVATE')
+    }
   } finally { await rm(dir, { recursive: true, force: true }) }
 })
