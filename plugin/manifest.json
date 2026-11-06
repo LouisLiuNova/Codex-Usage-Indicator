@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "local.codex-usage-indicator",
+  "name": "Codex 用量指示器（开发版）",
+  "version": "0.1.0-dev.1",
+  "description": "底部文字剩余量、侧栏圆环与共享详情；开发验收中。",
+  "author": "Codex Usage Indicator contributors",
+  "main": "index.js",
+  "scope": "renderer",
+  "runAt": "document-end",
+  "lifecycleGlobal": "__codexUsageIndicatorRuntime",
+  "documentation": "README.md",
+  "settings": { "mode": "none" },
+  "permissions": ["dom"]
+}

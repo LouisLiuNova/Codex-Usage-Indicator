@@ -41,14 +41,14 @@ export class RefreshScheduler {
     this.flight = undefined
     this.cancelTimers()
   }
-  changeContext() {
+  changeContext(refresh = true) {
     this.store.reset(this.active ? 'connecting' : 'disconnected')
     this.flight?.cancel()
     this.flight = undefined
     this.cancelTimers()
     this.failures = 0
     this.lastStarted = -Infinity
-    return this.active ? this.refresh() : Promise.resolve()
+    return this.active && refresh ? this.refresh() : Promise.resolve()
   }
   // Focus, visibility, online and verified notifications use the same merged entry.
   refresh(): Promise<void> {
