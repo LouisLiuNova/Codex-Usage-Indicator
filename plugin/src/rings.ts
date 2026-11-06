@@ -1,5 +1,5 @@
 import type { UsageSnapshot } from './store'
-import { connectionLabel, displayPercent, labels, names, remainingText, warning, type WindowKind } from './presentation'
+import { connectionLabel, displayPercent, labels, names, remainingText, warning, usageLevel, type WindowKind } from './presentation'
 
 export class RingView {
   readonly root: HTMLDivElement
@@ -57,7 +57,9 @@ export class RingView {
       entry.percent.textContent = this.location === 'composer' ? remaining : displayPercent(value)
       entry.circle?.setAttribute('stroke-dasharray', `${value === null ? 0 : Math.round(value)} 100`)
       entry.element.setAttribute('aria-label', `${names[kind]}额度，${remaining}${alert && alert !== remaining ? `，${alert}` : ''}`)
-      entry.element.dataset.warning = alert ? 'true' : 'false'
+      const level = usageLevel(value)
+      entry.element.dataset.usageLevel = level
+      entry.element.dataset.warning = level === 'critical' ? 'true' : 'false'
       if (this.location === 'rail') entry.element.title = alert
     }
     this.root.dataset.count = String(this.entries.size)

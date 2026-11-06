@@ -6,8 +6,10 @@ export const labels = { fiveHour: '5H', weekly: 'WEEK' } as const
 export const names = { fiveHour: '5 小时', weekly: '每周' } as const
 export const displayPercent = (value: number | null) => value === null ? '—' : `${Math.round(value)}%`
 export const remainingText = (value: number | null) => value === 0 ? '已经用尽' : `剩余 ${displayPercent(value)}`
-export const warning = (value: number | null) => value === null ? '额度未知' : value === 0 ? '已经用尽' : value >= 50 ? ''
-  : value >= 20 ? '余量偏低' : value >= 10 ? '余量很低' : '即将用尽'
+export const usageLevel = (value: number | null): 'normal' | 'low' | 'critical' =>
+  value === null || value >= 30 ? 'normal' : value >= 10 ? 'low' : 'critical'
+export const warning = (value: number | null) => value === null ? '额度未知' : value === 0 ? '已经用尽'
+  : value < 10 ? '即将用尽' : ''
 export function formatTime(seconds: number | null, timeZone?: string) {
   if (!finite(seconds) || seconds < 0) return '未知'
   const date = new Date(seconds * 1000)

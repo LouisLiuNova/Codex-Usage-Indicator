@@ -1,5 +1,5 @@
 export const styles = `
-.cui-rings,.cui-popover{font-family:inherit;color:var(--color-token-text-primary,CanvasText);color-scheme:light dark;box-sizing:border-box}
+.cui-rings,.cui-popover{font-family:inherit;color:var(--color-token-text-primary,CanvasText);color-scheme:inherit;box-sizing:border-box}
 .cui-rings{display:flex;align-items:center;justify-content:center;gap:16px;flex-shrink:0;min-width:0}
 .cui-rail{flex-direction:column;gap:8px;width:100%}
 [data-codex-composer-root]:has(+[data-cui-slot="composer"]){position:relative;z-index:1}
@@ -19,9 +19,12 @@ export const styles = `
 .cui-track{stroke:color-mix(in srgb,currentColor 12%,transparent)}
 .cui-progress{stroke:var(--cui-accent);stroke-linecap:round}
 .cui-fiveHour{--cui-accent:#0891b2}.cui-weekly{--cui-accent:#8b5cf6}
+.cui-rail .cui-trigger[data-usage-level=low]{--cui-accent:var(--color-token-text-warning,light-dark(#b45309,#fbbf24))}
+.cui-rail .cui-trigger[data-usage-level=critical]{--cui-accent:var(--color-token-text-error,light-dark(#dc2626,#f87171))}
+.cui-rail .cui-trigger:is([data-usage-level=low],[data-usage-level=critical]) .cui-track{stroke:color-mix(in srgb,var(--cui-accent) 24%,transparent)}
 .cui-percent{grid-area:1/1;font-size:10px;line-height:1;font-weight:600;font-variant-numeric:tabular-nums}
 .cui-window-label{font-size:9px;line-height:12px;font-weight:600;letter-spacing:.04em}
-.cui-rail .cui-trigger[data-warning=true] .cui-window-label::after{content:' !';color:var(--color-token-text-warning,#b45309)}
+.cui-rail .cui-trigger[data-warning=true] .cui-window-label::after{content:' !';color:var(--cui-accent)}
 .cui-popover{position:fixed;inset:auto;top:0;left:0;width:300px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;z-index:1000;padding:16px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:16px;background:var(--color-token-bg-primary,Canvas);box-shadow:0 12px 40px #0003;font-size:12px;line-height:1.5}
 .cui-popover header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .cui-popover h2{font-size:14px;line-height:20px;font-weight:600;margin:0}
