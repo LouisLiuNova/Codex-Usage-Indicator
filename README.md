@@ -22,6 +22,7 @@ bun run probe:app-server
 - [原方案逐项验收矩阵](docs/验收矩阵.md)
 - [探针运行与卸载说明](tools/probes/README.md)
 - [Windows P0 实测报告](docs/compatibility/windows-x64-p0.md)
+- [开发包与Loader注册表检查](docs/compatibility/package-contract.md)
 - [继续实机验证的步骤](docs/compatibility/继续实机验证.md)
 - [来源与复用边界](docs/参考来源.md)
 
