@@ -13,7 +13,17 @@ export function createGeometryFixture(doc: Document, mode: 'home' | 'thread', th
   const fixture = doc.createElement('section'); fixture.id = 'fixture'; fixture.dataset.testFixture = ''
   if (mode === 'thread') fixture.dataset.threadScrollFooter = 'true'
   fixture.innerHTML = `<div id="flow" data-thread-find-composer="true"><div class="contents"><div class="contents"><div data-codex-composer-root data-composer-placement="${mode}"><textarea data-codex-composer placeholder="synthetic composer"></textarea><button id="native">Send</button></div></div></div></div>`
-  if (mode === 'home') { fixture.style.top = '220px'; fixture.style.bottom = 'auto' }
+  if (mode === 'home') {
+    // Actual home footer: no thread markers, display:contents chain, bottom anchored.
+    fixture.removeAttribute('data-thread-scroll-footer')
+    fixture.querySelector('#flow')!.removeAttribute('data-thread-find-composer')
+    const root = fixture.querySelector<HTMLElement>('[data-codex-composer-root]')!
+    root.style.background = 'transparent'; root.style.borderRadius = '0'
+    const body = doc.createElement('div'); body.dataset.composerBody = ''
+    Object.assign(body.style, { position: 'absolute', inset: '0', borderRadius: '24px', background: theme === 'dark' ? '#2b2d3d' : '#fff' })
+    body.append(...root.childNodes); root.append(body)
+    fixture.querySelector('.contents')!.setAttribute('data-home-feed-composer', 'true')
+  }
   doc.body.append(fixture)
   const nav = doc.createElement('nav'); nav.dataset.appNavigationRail = ''; nav.dataset.testFixture = ''; doc.body.append(nav)
   const runtime = createRuntime(doc, { read: async () => ({ source: 'renderer-wham', coverage: 'both', quality: 'normal',

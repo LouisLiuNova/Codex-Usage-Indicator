@@ -28,11 +28,14 @@ function composerFlow(node: HTMLElement, reserve = 56): boolean {
     if ([...flow.children].filter(el => !el.matches('[data-cui-slot]')).length !== 1) return false
     flow = flow.parentElement
   }
-  const footer = node.closest<HTMLElement>('[data-thread-scroll-footer="true"]')
-  if (!flow || !footer || !node.closest('[data-thread-find-composer="true"]')) return false
+  if (!flow) return false
   const style = view.getComputedStyle(flow)
-  const area = footer.parentElement?.getBoundingClientRect()
-  return style.display === 'flex' && style.flexDirection === 'column'
+  if (style.display !== 'flex' || style.flexDirection !== 'column') return false
+  if (node.dataset.composerPlacement === 'home' && node.closest('[data-home-feed-composer="true"]'))
+    return node.getBoundingClientRect().top - reserve - 8 >= 80
+  const footer = node.closest<HTMLElement>('[data-thread-scroll-footer="true"]')
+  const area = footer?.parentElement?.getBoundingClientRect()
+  return !!footer && !!node.closest('[data-thread-find-composer="true"]')
     && footer.contains(flow) && !!area && node.getBoundingClientRect().top - reserve - 8 >= area.top + 80
 }
 
@@ -61,7 +64,7 @@ export function inspectAnchor(doc: Document, kind: 'composer' | 'rail', reserved
     if (r.width < 180) return result('space')
     if (r.bottom + reserve + 4 > view.innerHeight || (next && next.top < r.bottom + reserve + 4)) {
       if (next || !composerFlow(node, reserve)) return result('space')
-      return { ...result('ready', node), adapter: 'composer-flow-v2' }
+      return { ...result('ready', node), adapter: node.dataset.composerPlacement === 'home' ? 'composer-home-flow-v1' : 'composer-flow-v2' }
     }
   } else {
     // Wide sidebars are not evidence of the narrow icon rail requested by the design.
@@ -91,7 +94,7 @@ function insert(result: AnchorResult, content: HTMLElement | null, height: numbe
   const target = result.target
   const doc = target.ownerDocument
   const original = target.getBoundingClientRect()
-  const flow = result.adapter === 'composer-flow-v2'
+  const flow = result.adapter === 'composer-flow-v2' || result.adapter === 'composer-home-flow-v1'
   if (flow && !composerFlow(target, height - overlap)) return null
   const footer = result.adapter === 'navigation-rail-flex-v2' ? railFooter(target, height) : null
   if (result.adapter === 'navigation-rail-flex-v2' && !footer) return null
@@ -133,8 +136,15 @@ function insert(result: AnchorResult, content: HTMLElement | null, height: numbe
   else result.target.append(node)
   const update = () => {
     if (result.kind === 'composer' && content) {
-      const surface = target.querySelector<HTMLElement>('[data-composer-surface-variant]') ?? target
-      const radius = parseFloat(doc.defaultView!.getComputedStyle(surface).borderBottomLeftRadius)
+      const edge = target.getBoundingClientRect()
+      // Home uses a transparent surface container; its body paints the actual lower curve.
+      const surfaces = [target, ...target.querySelectorAll<HTMLElement>('[data-composer-surface-variant],[data-composer-body]')]
+      const radius = Math.max(0, ...surfaces.flatMap(surface => {
+        const rect = surface.getBoundingClientRect()
+        const value = parseFloat(doc.defaultView!.getComputedStyle(surface).borderBottomLeftRadius)
+        return rect.width >= edge.width - 1 && Math.abs(rect.bottom - edge.bottom) <= 1 && Number.isFinite(value)
+          ? [Math.min(value, rect.height / 2)] : []
+      }))
       const value = `${Number.isFinite(radius) ? Math.min(64, Math.max(overlap, radius)) : 24}px`
       if (node.style.getPropertyValue('--cui-composer-radius') !== value) node.style.setProperty('--cui-composer-radius', value)
     }
