@@ -2,12 +2,12 @@
 
 Codex Desktop 轻量用量指示器，按真实主账号窗口显示剩余额度。**当前处于 P0 技术验证，尚非可发布插件。**
 
-已实现严格窗口校验、独立 App Server 探针、Renderer 能力与双挂载诊断、可撤销测试标记和 Loader CJS 构建。Pro 仅 Weekly 按正常场景处理，不伪造 5H。正式 Store/Scheduler、圆环、共享 Popover 和发布流程须在对应平台 P0 通过后实施。
+已实现严格窗口校验、独立 App Server 探针、Renderer 能力与双挂载诊断、可撤销测试标记和 Loader CJS 构建。Pro 仅 Weekly 按正常场景处理，不伪造 5H。Store/Scheduler 已作为独立核心实现并测试，尚未连接客户端。平台整合、圆环、共享 Popover 和发布流程须在对应平台 P0 通过后实施。
 
 ```sh
 bun install --frozen-lockfile
 bun run check
-bun test
+bun run test
 bun run build
 bun run probe:app-server
 ```
