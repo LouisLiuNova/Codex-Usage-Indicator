@@ -32,7 +32,7 @@ export class WhamProvider {
   private blocked = false
   private stopped = false
   constructor(private discover: ClientDiscovery, private onIdentityChanged: () => void = () => {}) {}
-  /** Host ownership uncertainty clears discovery and blocks reads until a confirmed foreground entry. */
+  /** Host ownership uncertainty clears discovery and blocks reads until runtime revalidates the foreground context. */
   invalidate(block = false) {
     this.epoch++; this.clients = undefined; this.identity = null; this.blocked = block
   }

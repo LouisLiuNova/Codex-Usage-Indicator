@@ -48,6 +48,16 @@ try {
   await resident.start()
   await waitForStableDocument(() => resident.sync())
   report.initial = resident.snapshot()
+  await evaluate(`(()=>{const footer=document.createElement('div');footer.style.height='32px';const button=document.createElement('button');button.setAttribute('aria-haspopup','menu');button.setAttribute('aria-expanded','false');button.setAttribute('aria-label','profile');button.textContent='synthetic profile';footer.append(button);document.querySelector('nav').append(footer);const menu=document.createElement('div');menu.setAttribute('role','menu');Object.assign(menu.style,{position:'fixed',left:'100px',top:'20px',width:'120px',height:'80px'});globalThis.__menuFixture={open(){button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));button.setAttribute('aria-expanded','true');document.body.append(menu)},close(){button.setAttribute('aria-expanded','false');menu.remove()},stop(){menu.remove();footer.remove()}}})()`)
+  const beforeMenu = await state()
+  await evaluate(`__menuFixture.open();dispatchEvent(new Event('focus'));dispatchEvent(new Event('online'))`)
+  await wait(300)
+  report.menuOpen = await state()
+  const closeStarted = Date.now()
+  await evaluate('__menuFixture.close()')
+  report.menuClosed = await eventually(s => s.runtime?.status === 'ready' && s.runtime.contextPaused === false && s.runtime.requests > beforeMenu.runtime.requests)
+  report.menuClosed.elapsedMs = Date.now() - closeStarted
+  await evaluate('__menuFixture.stop();delete globalThis.__menuFixture')
   // No manual sync after reload: the held registration and page events must restore it.
   for (let i = 0; i < 3; i++) {
     const before = await state(); const start = Date.now(); await control.sendCommand('Page.reload')
@@ -84,14 +94,16 @@ try {
     await evaluate(`delete document.readyState;document.dispatchEvent(new Event('DOMContentLoaded'))`)
     report.cancelledBoot = await state()
   } finally { await pending.stop(); await evaluate('delete document.readyState') }
-  report.passed = report.reloads.every(r => r.state.slots === 2 && r.state.styles === 1)
+  report.passed = report.menuOpen.runtime?.contextPaused === true && report.menuOpen.runtime.requests === beforeMenu.runtime.requests
+    && report.menuClosed.state.runtime.contextPaused === false && report.reloads.every(r => r.state.slots === 2 && r.state.styles === 1)
     && report.afterReloads.connections === 1 && report.disabledReload.runtime === null
     && report.reconnected.connections >= 2 && report.reconnected.connected && !report.stopped.runtime && report.stopped.styles === 0
     && !report.stoppedReload.runtime && report.pendingBoot && !report.cancelledBoot.runtime
   if (output) await writeFile(output, JSON.stringify(report, null, 2))
-  console.log(JSON.stringify({passed:report.passed,reloadMs:report.reloads.map(r=>r.elapsedMs),reconnected:report.reconnected.connected,pendingBootCancelled:report.pendingBoot&&!report.cancelledBoot.runtime,diagnostics}))
+  console.log(JSON.stringify({passed:report.passed,reloadMs:report.reloads.map(r=>r.elapsedMs),menuCloseMs:report.menuClosed.elapsedMs,reconnected:report.reconnected.connected,pendingBootCancelled:report.pendingBoot&&!report.cancelledBoot.runtime,diagnostics}))
   if (!report.passed) process.exitCode = 1
 } finally {
+  await evaluate('globalThis.__menuFixture?.stop();delete globalThis.__menuFixture').catch(() => {})
   await resident.stop().catch(() => {})
   await control.sendCommand('Emulation.clearDeviceMetricsOverride').catch(() => {})
   await control.close()
