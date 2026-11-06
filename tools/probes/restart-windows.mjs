@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const [mode, loaderArg, dataArg, outputArg, pidArg] = process.argv.slice(2)
 if (process.platform !== 'win32') throw new Error('此工具仅支持原生 Windows Node')
-if (!['--check', '--arm', '--worker'].includes(mode)) throw new Error('需要 --check、--arm 或 --worker')
+if (!['--check', '--arm', '--worker', '--wait', '--wait-worker'].includes(mode)) throw new Error('需要 --check、--arm 或 --wait')
 const loader = path.resolve(loaderArg), data = path.resolve(dataArg), output = path.resolve(outputArg)
 const targetPid = Number(pidArg)
 if (!Number.isSafeInteger(targetPid) || targetPid <= 0) throw new Error('需要已核对的 Codex 主进程 PID')
@@ -23,10 +23,11 @@ const processes = await listWindowsCodexProcesses(packageInfo)
 if (!processes.some(p => p.processId === targetPid)) throw new Error('指定 Codex 进程已经退出；不执行重启')
 const stateFile = path.join(output, 'restart-state.json')
 const state = value => writeFileSync(stateFile, JSON.stringify({ ...value, at: new Date().toISOString() }, null, 2))
-const args = ['--worker', loader, data, output, String(targetPid)]
+const waitForExit = mode === '--wait' || mode === '--wait-worker'
+const args = [waitForExit ? '--wait-worker' : '--worker', loader, data, output, String(targetPid)]
 if (mode === '--check') {
   console.log(JSON.stringify({ ready: true, platform: 'win32', loaderVersion: pkg.version, appVersion: packageInfo.version, targetPid }))
-} else if (mode === '--arm') {
+} else if (mode === '--arm' || mode === '--wait') {
   if (existsSync(stateFile)) {
     const previous = JSON.parse(readFileSync(stateFile, 'utf8'))
     if (previous.workerPid) {
@@ -38,9 +39,18 @@ if (mode === '--check') {
   const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { detached: true, stdio: ['ignore', fd, fd], windowsHide: true })
   await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject) })
   child.unref(); closeSync(fd)
-  state({ status: 'armed', workerPid: child.pid, targetPid, delaySeconds: 30 })
-  console.log(JSON.stringify({ armed: true, workerPid: child.pid, delaySeconds: 30 }))
+  state({ status: waitForExit ? 'awaiting-client-exit' : 'armed', workerPid: child.pid, targetPid, delaySeconds: waitForExit ? 0 : 30 })
+  console.log(JSON.stringify({ armed: true, workerPid: child.pid, waitForExit }))
 } else {
+  if (waitForExit) {
+    state({ status: 'awaiting-client-exit', workerPid: process.pid, targetPid })
+    const until = Date.now() + 30 * 60_000
+    while ((await listWindowsCodexProcesses(packageInfo)).length && Date.now() < until)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+    if ((await listWindowsCodexProcesses(packageInfo)).length) {
+      state({ status: 'client-exit-wait-expired', workerPid: process.pid }); process.exit(1)
+    }
+  } else {
   await new Promise(resolve => setTimeout(resolve, 30_000))
   state({ status: 'closing', workerPid: process.pid, targetPid })
   // Normal window close only. Never force-kill Codex or its running tasks.
@@ -64,6 +74,7 @@ if (mode === '--check') {
   }
   if ((await listWindowsCodexProcesses(packageInfo)).length) {
     state({ status: 'close-timeout', workerPid: process.pid }); process.exit(1)
+  }
   }
   state({ status: 'starting-loader', workerPid: process.pid })
   const { startWindowsLiveRuntime } = await import(pathToFileURL(path.join(loader, 'src/live-runtime.mjs')).href)
