@@ -19,6 +19,7 @@ bun run probe:app-server
 构建生成 `dist/plugin`（可手动加载的开发版插件）、`dist/probe`（Renderer 探针）与 `dist/app-server-probe.mjs`（可由原生 Node 执行）。输出是有限白名单数据和诊断码，不读取或复制凭据文件。构建产物不入库，不生成正式 v0.1.0 发布 ZIP。开发版使用和限制见 [插件说明](plugin/README.md)。
 
 - [实施进度与平台门槛](docs/实施进度.md)
+- [原方案逐项验收矩阵](docs/验收矩阵.md)
 - [探针运行与卸载说明](tools/probes/README.md)
 - [Windows P0 实测报告](docs/compatibility/windows-x64-p0.md)
 - [继续实机验证的步骤](docs/compatibility/继续实机验证.md)
