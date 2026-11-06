@@ -71,18 +71,66 @@ test('停用立即中止请求，迟到响应不重建UI或污染新实例', asy
     next.stop()
   } finally { s.win.close() }
 })
-test('连续前台事件清空旧上下文，合并请求；pagehide释放资源', async () => {
+test('连续前台事件保留已有数据并合并请求；pagehide释放资源', async () => {
   const s = setup()
   try {
     const runtime = createRuntime(s.doc, { clock: s.clock, read: async () => usage() })
-    await flush()
+    await flush(); await s.clock.advance(1000)
     for (let i = 0; i < 5; i++) s.win.dispatchEvent(new s.win.Event('focus'))
-    expect(runtime.inspect().status).toBe('unavailable')
+    expect(runtime.inspect()).toMatchObject({ status: 'ready', coverage: 'weekly-only' })
     await pause(260); await flush()
     expect(runtime.inspect()).toMatchObject({ requests: 2, status: 'ready' })
     s.win.dispatchEvent(new s.win.Event('pagehide'))
     expect(runtime.inspect().active).toBe(false)
     expect(s.clock.tasks.size).toBe(0)
+  } finally { s.win.close() }
+})
+test('输入框和按钮获得焦点不会被误判为窗口回到前台', async () => {
+  const s = setup()
+  try {
+    s.doc.body.innerHTML = '<textarea></textarea><button>native control</button>'
+    const runtime = createRuntime(s.doc, { clock: s.clock, read: async () => usage() })
+    await flush(); await s.clock.advance(1000)
+    s.doc.querySelector('textarea')!.focus(); s.doc.querySelector('button')!.focus()
+    await pause(260); await flush()
+    expect(runtime.inspect()).toMatchObject({ requests: 1, status: 'ready', coverage: 'weekly-only' })
+    runtime.stop()
+  } finally { s.win.close() }
+})
+test('前台刷新挂起及失败时保留同账号快照，重复focus不取消请求', async () => {
+  const s = setup()
+  let calls = 0, reject!: (error: Error) => void, signal!: AbortSignal
+  try {
+    const runtime = createRuntime(s.doc, { clock: s.clock, read: abort => {
+      calls++
+      if (calls === 1) return Promise.resolve(usage())
+      signal = abort; return new Promise((_, fail) => { reject = fail })
+    } })
+    await flush(); await s.clock.advance(1000)
+    s.win.dispatchEvent(new s.win.Event('focus')); await pause(260); await flush()
+    expect(runtime.inspect()).toMatchObject({ requests: 2, status: 'ready', coverage: 'weekly-only' })
+    s.win.dispatchEvent(new s.win.Event('focus')); await pause(260)
+    expect(signal.aborted).toBe(false)
+    expect(runtime.inspect().requests).toBe(2)
+    reject(new Error('offline')); await flush()
+    expect(runtime.inspect()).toMatchObject({ status: 'ready', coverage: 'weekly-only' })
+    runtime.stop()
+  } finally { s.win.close() }
+})
+test('原生账号菜单活动仍立即清空并暂停，前台恢复重新读取', async () => {
+  const s = setup()
+  try {
+    s.doc.body.innerHTML = '<nav data-app-navigation-rail><div></div><div><button aria-haspopup="menu" aria-label="profile"></button></div></nav>'
+    for (const child of s.doc.querySelector('nav')!.children) child.getBoundingClientRect = () => ({ width: 40 }) as DOMRect
+    const runtime = createRuntime(s.doc, { clock: s.clock, read: async () => usage() })
+    await flush()
+    s.doc.querySelector('button')!.dispatchEvent(new s.win.PointerEvent('pointerdown', { bubbles: true }) as unknown as PointerEvent)
+    expect(runtime.inspect()).toMatchObject({ status: 'unavailable', coverage: 'none' })
+    await s.clock.advance(30_000)
+    expect(runtime.inspect().requests).toBe(1)
+    s.win.dispatchEvent(new s.win.Event('focus')); await pause(260); await flush()
+    expect(runtime.inspect()).toMatchObject({ requests: 2, status: 'ready', coverage: 'weekly-only' })
+    runtime.stop()
   } finally { s.win.close() }
 })
 test('缺少锚点时不占位，普通消息更新不扫描，窗口变化重新检查', async () => {

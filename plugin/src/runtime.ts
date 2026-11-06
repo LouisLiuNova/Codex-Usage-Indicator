@@ -11,7 +11,7 @@ export function createRuntime(doc: Document, options: { read?: UsageProvider; cl
   const win = doc.defaultView! as RuntimeWindow
   win.__codexUsageIndicatorRuntime?.stop()
   const store = new UsageStore()
-  let active = true, requests = 0
+  let active = true, requests = 0, ownershipUncertain = false
   let scheduler: RefreshScheduler | undefined, provider: WhamProvider | undefined
   let popover: SharedPopover | undefined, mounts: MountManager | undefined
   let foreground: ReturnType<typeof setTimeout> | undefined
@@ -44,11 +44,13 @@ export function createRuntime(doc: Document, options: { read?: UsageProvider; cl
     }
     const enterForeground = () => {
       if (!active || doc.visibilityState === 'hidden') return
-      provider!.invalidate(false); void scheduler!.changeContext(false)
+      // Ordinary refreshes retain the current snapshot and any in-flight request.
+      // Only an observed ownership risk invalidates the account context.
+      if (ownershipUncertain) { provider!.invalidate(false); ownershipUncertain = false }
       if (foreground !== undefined) clearTimeout(foreground)
       foreground = setTimeout(() => { foreground = undefined; if (active) void scheduler!.refresh() }, 200)
     }
-    listen(win, 'focus', enterForeground)
+    listen(win, 'focus', event => { if (event.target === win) enterForeground() })
     listen(doc, 'visibilitychange', enterForeground)
     listen(win, 'online', () => { if (active) void scheduler!.refresh() })
     // Opening a native profile menu makes account ownership uncertain. Clear immediately,
@@ -61,6 +63,7 @@ export function createRuntime(doc: Document, options: { read?: UsageProvider; cl
         || /usage|用量/i.test(button.getAttribute('aria-label') ?? '')) return
       const footer = [...nav.children].filter(node => node.getBoundingClientRect().width > 0).at(-1)
       if (!footer?.contains(button)) return
+      ownershipUncertain = true
       provider!.invalidate(true); void scheduler!.changeContext(false); popover!.close()
       if (foreground !== undefined) clearTimeout(foreground)
       foreground = undefined
