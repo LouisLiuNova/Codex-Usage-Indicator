@@ -14,5 +14,8 @@
     "@types/bun": "1.3.13",
     "happy-dom": "20.8.4",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@floating-ui/dom": "1.7.4"
   }
 }
