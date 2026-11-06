@@ -32,6 +32,50 @@ function setup() {
   const clock = new ClockHarness()
   return { win, doc, clock }
 }
+function trackListeners(target: EventTarget) {
+  const add = target.addEventListener, remove = target.removeEventListener
+  const listeners = new Map<string, Set<EventListenerOrEventListenerObject>>()
+  target.addEventListener = (type, listener, options) => {
+    if (!listener) return
+    add.call(target, type, listener, options)
+    if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type)!.add(listener)
+  }
+  target.removeEventListener = (type, listener, options) => {
+    if (!listener) return
+    remove.call(target, type, listener, options)
+    listeners.get(type)?.delete(listener)
+  }
+  return { count: () => [...listeners.values()].reduce((sum, set) => sum + set.size, 0),
+    restore() { target.addEventListener = add; target.removeEventListener = remove } }
+}
+test.each(['observer', 'popover-listener'] as const)('启动中途%s失败释放已注册资源，并可重新启动', async fault => {
+  const s = setup(), windowListeners = trackListeners(s.win as unknown as EventTarget), documentListeners = trackListeners(s.doc)
+  const host = s.win as unknown as { MutationObserver: typeof MutationObserver; addEventListener: EventTarget['addEventListener'] }
+  const Observer = host.MutationObserver, add = host.addEventListener
+  try {
+    if (fault === 'observer') host.MutationObserver = class extends Observer { override observe() { throw new Error('test-observe-failure') } }
+    else host.addEventListener = (type, listener, options) => {
+      if (type === 'keydown') throw new Error('test-listener-failure')
+      if (listener) add.call(s.win, type, listener, options)
+    }
+    expect(() => createRuntime(s.doc, { clock: s.clock, read: async () => usage() })).toThrow()
+    host.MutationObserver = Observer; host.addEventListener = add
+    await pause(100)
+    expect(windowListeners.count()).toBe(0)
+    expect(documentListeners.count()).toBe(0)
+    expect(s.doc.querySelector('[data-cui-slot],style[data-cui-style],.cui-popover')).toBeNull()
+    expect((s.win as unknown as { __codexUsageIndicatorRuntime?: unknown }).__codexUsageIndicatorRuntime).toBeUndefined()
+    expect(s.clock.tasks.size).toBe(0)
+    const recovered = createRuntime(s.doc, { clock: s.clock, read: async () => usage() })
+    await flush()
+    expect(recovered.inspect()).toMatchObject({ active: true, status: 'ready' })
+    recovered.stop()
+    expect(windowListeners.count() + documentListeners.count()).toBe(0)
+  } finally {
+    host.MutationObserver = Observer; host.addEventListener = add
+    windowListeners.restore(); documentListeners.restore(); s.win.close()
+  }
+})
 test('运行时单例替换与重复stop清除计时器、样式和页面监听', async () => {
   const s = setup()
   try {

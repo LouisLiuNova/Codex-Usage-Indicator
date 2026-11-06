@@ -16,7 +16,7 @@ export class MountManager {
   private timer: ReturnType<typeof setTimeout> | undefined
   private force = false
   private stopped = false
-  private unsubscribe: () => void
+  private unsubscribe: () => void = () => {}
   private scans = 0
   private notifications = 0
   constructor(private doc: Document, store: UsageStore, popover: SharedPopover) {
@@ -24,18 +24,20 @@ export class MountManager {
     this.bindings = (['composer', 'rail'] as const).map(kind => ({ kind,
       view: new RingView(doc, b => popover.bind(b), kind), slot: null, target: null, height: 0, code: 'missing' }))
     this.observer = new win.MutationObserver(this.onMutation)
-    if (typeof win.ResizeObserver === 'function') this.resize = new win.ResizeObserver(entries => {
-      for (const entry of entries) {
-        const before = this.dimensions.get(entry.target), after = entry.target.getBoundingClientRect()
-        if (before && (Math.abs(before.width - after.width) > 1 || Math.abs(before.height - after.height) > 1)) { this.schedule(true); break }
-      }
-    })
-    this.unsubscribe = store.subscribe(snapshot => {
-      for (const binding of this.bindings) binding.view.update(snapshot)
-      this.schedule()
-    })
-    win.addEventListener('resize', this.onResize)
-    this.watch()
+    try {
+      if (typeof win.ResizeObserver === 'function') this.resize = new win.ResizeObserver(entries => {
+        for (const entry of entries) {
+          const before = this.dimensions.get(entry.target), after = entry.target.getBoundingClientRect()
+          if (before && (Math.abs(before.width - after.width) > 1 || Math.abs(before.height - after.height) > 1)) { this.schedule(true); break }
+        }
+      })
+      this.unsubscribe = store.subscribe(snapshot => {
+        for (const binding of this.bindings) binding.view.update(snapshot)
+        this.schedule()
+      })
+      win.addEventListener('resize', this.onResize)
+      this.watch()
+    } catch (error) { this.stop(); throw error }
   }
   private onResize = () => this.schedule(true)
   private onMutation = (records: MutationRecord[]) => {

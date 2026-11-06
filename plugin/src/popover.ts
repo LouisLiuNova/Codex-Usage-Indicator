@@ -49,7 +49,7 @@ export class SharedPopover {
   private mode: PopoverMode = 'closed'
   private closeTimer: ReturnType<typeof setTimeout> | undefined
   private stopPosition: (() => void) | undefined
-  private unsubscribe: () => void
+  private unsubscribe: () => void = () => {}
   private stopped = false
   private triggers = new Set<HTMLButtonElement>()
   private bindings = new Map<HTMLButtonElement, () => void>()
@@ -63,15 +63,17 @@ export class SharedPopover {
     this.closeButton = doc.createElement('button'); this.closeButton.type = 'button'
     this.closeButton.className = 'cui-close'; this.closeButton.textContent = '×'
     this.closeButton.setAttribute('aria-label', '关闭用量详情')
-    this.closeButton.addEventListener('click', this.closeReturningFocus)
     header.append(title, this.closeButton)
     this.body = doc.createElement('div'); this.panel.append(header, this.body)
-    this.panel.addEventListener('pointerenter', this.cancelClose)
-    this.panel.addEventListener('pointerleave', this.queueClose)
-    this.panel.addEventListener('focusout', this.queueClose)
-    this.doc.addEventListener('pointerdown', this.outside, true)
-    this.doc.defaultView!.addEventListener('keydown', this.keydown, true)
-    this.unsubscribe = store.subscribe(() => this.render())
+    try {
+      this.closeButton.addEventListener('click', this.closeReturningFocus)
+      this.panel.addEventListener('pointerenter', this.cancelClose)
+      this.panel.addEventListener('pointerleave', this.queueClose)
+      this.panel.addEventListener('focusout', this.queueClose)
+      this.doc.addEventListener('pointerdown', this.outside, true)
+      this.doc.defaultView!.addEventListener('keydown', this.keydown, true)
+      this.unsubscribe = store.subscribe(() => this.render())
+    } catch (error) { this.stop(); throw error }
   }
   get state() { return this.mode }
   private cancelClose = () => { if (this.closeTimer !== undefined) clearTimeout(this.closeTimer); this.closeTimer = undefined }
