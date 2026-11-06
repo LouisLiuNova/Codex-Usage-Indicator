@@ -71,7 +71,8 @@ function dom() {
     if (tag === 'div') el.getBoundingClientRect = () => {
       const rail = el.dataset.cuiProbe === 'rail'
       const left = rail ? 0 : 200, top = rail ? 100 : 620
-      return { x: left, y: top, left, top, width: 68, height: 56, right: left + 68, bottom: top + 56, toJSON() {} }
+      const width = rail && el.style.width.endsWith('px') ? parseFloat(el.style.width) : 68
+      return { x: left, y: top, left, top, width, height: 56, right: left + width, bottom: top + 56, toJSON() {} }
     }
     return el
   }) as typeof doc.createElement
@@ -104,6 +105,59 @@ describe('挂载前置条件与生命周期', () => {
     const { win, doc, box } = dom()
     box(doc.querySelector('nav')!, 0, 0, 260, 800)
     expect(inspectAnchor(doc, 'rail').code).toBe('space')
+    win.close()
+  })
+  test('rail 增长区域空白可收缩，插入 footer 前且不撑宽原生 rail', () => {
+    const { win, doc, box } = dom()
+    const nav = doc.querySelector<HTMLElement>('nav')!
+    nav.style.paddingInline = '8px'
+    box(nav, 0, 0, 52, 800)
+    const grower = doc.createElement('div'), footer = doc.createElement('div'), button = doc.createElement('button')
+    Object.assign(grower.style, { display: 'flex', flexDirection: 'column', flexGrow: '1' })
+    button.dataset.sidebarDestination = 'builtin:home'
+    grower.append(button); nav.append(grower, footer)
+    box(grower, 6, 8, 40, 700); box(button, 8, 10, 36, 36); box(footer, 8, 716, 36, 80)
+    const result = inspectAnchor(doc, 'rail')
+    expect(result.adapter).toBe('navigation-rail-flex-v2')
+    const dispose = mountMarker(result)
+    const marker = nav.querySelector<HTMLElement>('[data-cui-probe]')!
+    expect(marker.style.width).toBe('36px')
+    expect(marker.nextElementSibling).toBe(footer)
+    dispose?.()
+    expect(nav.querySelector('[data-cui-probe]')).toBeNull()
+    button.removeAttribute('data-sidebar-destination')
+    expect(inspectAnchor(doc, 'rail').code).toBe('space')
+    win.close()
+  })
+  test.each([false, true])('Composer 外围可平移，但尺寸变化 %p 时必须回滚', resize => {
+    const { win, doc, box } = dom()
+    const root = doc.querySelector<HTMLElement>('[data-codex-composer-root]')!
+    const editor = doc.querySelector<HTMLElement>('textarea')!
+    const flow = doc.querySelector<HTMLElement>('main')!
+    flow.dataset.threadFindComposer = 'true'
+    Object.assign(flow.style, { display: 'flex', flexDirection: 'column' })
+    const area = doc.createElement('section'), footer = doc.createElement('section')
+    footer.dataset.threadScrollFooter = 'true'
+    doc.body.append(area); area.append(footer); footer.append(flow)
+    box(area, 200, 96, 600, 684)
+    const rect = (top: number, width: number, height: number) =>
+      ({ x: 200, y: top, left: 200, top, width, height, right: 200 + width, bottom: top + height, toJSON() {} })
+    const hasMarker = () => !!doc.querySelector('[data-cui-probe="composer"]')
+    root.getBoundingClientRect = () => rect(hasMarker() ? 576 : 640, hasMarker() && resize ? 604 : 600, 130)
+    editor.getBoundingClientRect = () => rect(hasMarker() ? 586 : 650, 580, 40)
+    const create = doc.createElement.bind(doc)
+    doc.createElement = ((tag: string, options?: ElementCreationOptions) => {
+      const element = create(tag, options)
+      if (tag === 'div') element.getBoundingClientRect = () => rect(714, 40, 56)
+      return element
+    }) as typeof doc.createElement
+    const result = inspectAnchor(doc, 'composer')
+    expect(result.adapter).toBe('composer-flow-v2')
+    const dispose = mountMarker(result)
+    expect(!!dispose).toBe(!resize)
+    dispose?.()
+    expect(root.getBoundingClientRect().top).toBe(640)
+    expect(doc.querySelector('[data-cui-probe]')).toBeNull()
     win.close()
   })
   test('插入后与原生输入控件重叠则同步回滚', () => {
