@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 // @ts-expect-error The native Node launcher is intentionally an untranspiled mjs entry.
-import { withoutCrashReporters, processFamily } from '../tools/probes/load-macos.mjs'
+import { withoutCrashReporters, processFamily, main } from '../tools/probes/load-macos.mjs'
 
 test('macOS 仅忽略独立 Crashpad，保留主进程、Renderer 及同名参数', () => {
   const processes = [
@@ -15,4 +15,8 @@ test('macOS 仅忽略独立 Crashpad，保留主进程、Renderer 及同名参�
 
 test('监听归属接受宿主的多层子进程，拒绝无关联和孤立进程', () => {
   expect([...processFamily([10], [[30, 20], [20, 10], [40, 1], [50, 99]])].sort((a, b) => a - b)).toEqual([10, 20, 30])
+})
+
+test.each(['--once', '--wait-once', '--inject-once'])('不再接受历史一次性模式 %s', async mode => {
+  await expect(main([mode, 'loader', 'registry', 'output'])).rejects.toThrow('arguments')
 })
