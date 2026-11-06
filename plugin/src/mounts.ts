@@ -1,4 +1,4 @@
-import { inspectAnchor, mountContent, visible, type AnchorResult } from './adapters/dom'
+import { inspectAnchor, mountContent, type AnchorResult } from './adapters/dom'
 import { RingView } from './rings'
 import type { SharedPopover } from './popover'
 import type { UsageStore } from './store'
@@ -16,7 +16,6 @@ export class MountManager {
   private dimensions = new Map<Element, { width: number; height: number }>()
   private candidates: HTMLElement[] = []
   private timer: ReturnType<typeof setTimeout> | undefined
-  private force = false
   private stopped = false
   private unsubscribe: () => void = () => {}
   private scans = 0
@@ -30,7 +29,7 @@ export class MountManager {
       if (typeof win.ResizeObserver === 'function') this.resize = new win.ResizeObserver(entries => {
         for (const entry of entries) {
           const before = this.dimensions.get(entry.target), after = entry.target.getBoundingClientRect()
-          if (before && (Math.abs(before.width - after.width) > 1 || Math.abs(before.height - after.height) > 1)) { this.schedule(true); break }
+          if (before && (Math.abs(before.width - after.width) > 1 || Math.abs(before.height - after.height) > 1)) { this.updateGeometry(); this.schedule(); break }
         }
       })
       this.unsubscribe = store.subscribe(snapshot => {
@@ -41,40 +40,43 @@ export class MountManager {
       this.watch()
     } catch (error) { this.stop(); throw error }
   }
-  private onResize = () => this.schedule(true)
+  private updateGeometry() {
+    for (const binding of this.bindings) if (binding.slot?.root.isConnected && binding.target?.isConnected
+      && binding.target.getBoundingClientRect().width > 0) binding.slot.update()
+  }
+  private onResize = () => { this.updateGeometry(); this.schedule() }
   private onMutation = (records: MutationRecord[]) => {
     if (this.stopped) return
     this.notifications++
-    if (records.some(record => this.affectsLayout(record))) this.schedule(true)
+    if (records.some(record => this.affectsLayout(record))) { this.updateGeometry(); this.schedule() }
   }
   private affectsLayout(record: MutationRecord) {
     const win = this.doc.defaultView!
+    if (record.type === 'childList' && this.bindings.some(b => b.slot && [...record.removedNodes].includes(b.slot.root))) return true
     if (record.target instanceof win.Element && record.target.closest(own)) return false
     if (record.type === 'attributes') return record.target instanceof win.Element
       && (record.target.matches(selectors) || this.candidates.some(node => record.target instanceof win.Element && record.target.contains(node)))
     return [...record.addedNodes, ...record.removedNodes].some(node => {
       if (!(node instanceof win.Element) || node.matches(own)) return false
-      return node.matches(selectors) || !!node.querySelector(selectors) || this.bindings.some(b => b.target && node.contains(b.target))
+      return node.matches(selectors) || !!node.querySelector(selectors) || this.bindings.some(b => b.target && (node.contains(b.target) || b.target.contains(record.target)))
     })
   }
-  private schedule(force = false) {
+  private schedule() {
     if (this.stopped) return
-    this.force ||= force
     if (this.timer !== undefined) return
     this.timer = setTimeout(() => { this.timer = undefined; this.sync() }, 50)
   }
   private sync() {
     if (this.stopped) return
-    const force = this.force; this.force = false
     this.scans++
     // Ordinary sampling must still reject a newly ambiguous or hidden native anchor.
-    const live = [...this.doc.querySelectorAll<HTMLElement>(selectors)].filter(visible)
     for (const binding of this.bindings) {
       const height = binding.view.preferredHeight
-      const rect = binding.target?.getBoundingClientRect()
-      const matches = live.filter(node => node.matches(binding.kind === 'composer' ? '[data-codex-composer-root]' : 'nav[data-app-navigation-rail]'))
-      if (!force && binding.slot?.root.isConnected && binding.target?.isConnected && rect && rect.width > 0 && rect.height > 0
-        && height === binding.height && matches.length === 1 && matches[0] === binding.target) continue
+      // Inspect with the existing slot in place. Native layout notifications must not
+      // remove/reinsert a healthy flow item: that moves the composer and feeds ResizeObserver.
+      const anchor = inspectAnchor(this.doc, binding.kind, height - binding.view.preferredOverlap, binding.slot?.root)
+      if (binding.slot?.root.isConnected && binding.target === anchor.target && anchor.code === 'ready'
+        && height === binding.height) { binding.slot.update(); binding.code = 'ready'; continue }
       const focused = binding.view.root.contains(this.doc.activeElement) ? this.doc.activeElement as HTMLElement : null
       binding.slot?.stop(); binding.slot = null; binding.target = null
       try {
@@ -95,19 +97,10 @@ export class MountManager {
     if (this.stopped) return
     this.candidates = [...this.doc.querySelectorAll<HTMLElement>(selectors)]
     const targets = this.bindings.map(b => b.target).filter((node): node is HTMLElement => !!node)
-    if (targets.length < 2) {
-      const base = this.doc.body ?? this.doc.documentElement
-      this.observer.observe(base, { childList: true, subtree: true, attributes: true, attributeFilter: attributes })
-      if (base !== this.doc.documentElement) this.observer.observe(this.doc.documentElement,
-        { childList: true, attributes: true, attributeFilter: attributes })
-    } else {
-      // Watch each ancestor's direct children. Replacing any containing branch is observed,
-      // while ordinary message content and plugin-owned mutations are not scanned.
-      const ancestors = new Set<Element>()
-      for (const target of targets) for (let node: Element | null = target; node; node = node.parentElement) ancestors.add(node)
-      for (const node of ancestors) this.observer.observe(node, { childList: true, attributes: true,
-        attributeFilter: attributes })
-    }
+    // Cached/hidden chat branches can become active without replacing a currently
+    // watched ancestor. Observe the document, but filter unrelated message mutations.
+    this.observer.observe(this.doc.documentElement, { childList: true, subtree: true,
+      attributes: true, attributeFilter: attributes })
     for (const target of targets) {
       const rect = target.getBoundingClientRect()
       this.dimensions.set(target, { width: rect.width, height: rect.height }); this.resize?.observe(target)

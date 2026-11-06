@@ -2,7 +2,10 @@ export const styles = `
 .cui-rings,.cui-popover{font-family:inherit;color:var(--color-token-text-primary,CanvasText);color-scheme:light dark;box-sizing:border-box}
 .cui-rings{display:flex;align-items:center;justify-content:center;gap:16px;flex-shrink:0;min-width:0}
 .cui-rail{flex-direction:column;gap:8px;width:100%}
-.cui-composer{width:100%;min-height:44px;justify-content:flex-end;padding:14px 16px 4px;gap:16px;opacity:.8;border:1px solid color-mix(in srgb,currentColor 14%,transparent);border-top-color:transparent;border-radius:12px;pointer-events:none;background:linear-gradient(to bottom,transparent 12px,var(--color-background-primary,var(--color-token-bg-primary,Canvas)) 12px)}
+[data-codex-composer-root]:has(+[data-cui-slot="composer"]){position:relative;z-index:1}
+[data-cui-slot="composer"]{position:relative;z-index:0}
+.cui-composer{position:relative;z-index:0;width:100%;min-height:44px;justify-content:flex-end;padding:14px 16px 4px;gap:16px;opacity:.8;border:0;border-radius:0 0 12px 12px;pointer-events:none}
+.cui-composer::before{content:"";position:absolute;z-index:-1;inset:calc(12px - var(--cui-composer-radius,24px)) 0 0;border:1px solid color-mix(in srgb,currentColor 14%,transparent);border-top:0;border-radius:0 0 12px 12px;background:var(--color-background-primary,var(--color-token-bg-primary,Canvas));pointer-events:none}
 .cui-composer .cui-value{flex-direction:row;gap:6px;min-height:20px;pointer-events:none}
 .cui-composer .cui-percent{font-size:11px;line-height:16px;white-space:nowrap}
 .cui-composer .cui-window-label{font-size:10px;line-height:16px;color:var(--color-token-text-secondary,GrayText)}

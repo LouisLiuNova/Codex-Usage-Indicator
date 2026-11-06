@@ -50,6 +50,7 @@ try {
   await stage('hidden-duplicate', 'addHiddenDuplicate', value => value.slots === 2 && value.scans > beforeDuplicate.scans)
   await stage('ambiguity-rejected', 'revealDuplicate', value => value.slots === 1 && value.adapters.some(a => a.kind === 'composer' && a.code === 'ambiguity'))
   await stage('ambiguity-recovered', 'removeDuplicate', value => value.slots === 2)
+  await stage('removed-slot-recovered', 'removeSlot', value => value.slots === 2 && value.scans > report.checks['ambiguity-recovered'].scans)
   report.status = 'passed'; delete report.code
 } catch { process.exitCode = 1 }
 finally {
