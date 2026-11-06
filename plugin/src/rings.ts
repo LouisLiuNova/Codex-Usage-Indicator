@@ -1,5 +1,5 @@
 import type { UsageSnapshot } from './store'
-import { connectionLabel, displayPercent, labels, names, warning, type WindowKind } from './presentation'
+import { connectionLabel, displayPercent, labels, names, remainingText, warning, type WindowKind } from './presentation'
 
 export class RingView {
   readonly root: HTMLDivElement
@@ -53,11 +53,12 @@ export class RingView {
         this.entries.set(kind, entry)
       }
       const value = window.remainingPercent
-      entry.percent.textContent = this.location === 'composer' ? `剩余 ${value === null ? '未知' : displayPercent(value)}` : displayPercent(value)
+      const remaining = value === null ? '剩余 未知' : remainingText(value), alert = warning(value)
+      entry.percent.textContent = this.location === 'composer' ? remaining : displayPercent(value)
       entry.circle?.setAttribute('stroke-dasharray', `${value === null ? 0 : Math.round(value)} 100`)
-      entry.element.setAttribute('aria-label', `${names[kind]}额度，剩余 ${value === null ? '未知' : displayPercent(value)}${warning(value) ? `，${warning(value)}` : ''}`)
-      entry.element.dataset.warning = warning(value) ? 'true' : 'false'
-      if (this.location === 'rail') entry.element.title = warning(value)
+      entry.element.setAttribute('aria-label', `${names[kind]}额度，${remaining}${alert && alert !== remaining ? `，${alert}` : ''}`)
+      entry.element.dataset.warning = alert ? 'true' : 'false'
+      if (this.location === 'rail') entry.element.title = alert
     }
     this.root.dataset.count = String(this.entries.size)
     this.status.remove()

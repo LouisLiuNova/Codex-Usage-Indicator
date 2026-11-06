@@ -1,7 +1,12 @@
 import { expect, test } from 'bun:test'
-import { formatTime, warning, displayPercent } from '../plugin/src/presentation'
-test.each([[50, ''], [49.9, '余量偏低'], [20, '余量偏低'], [19.9, '余量很低'], [10, '余量很低'], [9.9, '即将用尽'], [null, '额度未知']] as const)('阈值 %p 无小数断档', (value, label) => {
+import { formatTime, warning, displayPercent, remainingText } from '../plugin/src/presentation'
+test.each([[50, ''], [49.9, '余量偏低'], [20, '余量偏低'], [19.9, '余量很低'], [10, '余量很低'], [9.9, '即将用尽'], [0.1, '即将用尽'], [0, '已经用尽'], [null, '额度未知']] as const)('阈值 %p 无小数断档', (value, label) => {
   expect(warning(value)).toBe(label)
+})
+test('实际为零显示已经用尽，正数和未知保持原有含义', () => {
+  expect(remainingText(0)).toBe('已经用尽')
+  expect(remainingText(1)).toBe('剩余 1%')
+  expect(remainingText(null)).toBe('剩余 —')
 })
 test('显示百分比与未知值', () => {
   expect(displayPercent(49.9)).toBe('50%')

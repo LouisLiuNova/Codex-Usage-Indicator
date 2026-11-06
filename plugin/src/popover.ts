@@ -1,6 +1,6 @@
 import { autoUpdate, computePosition, flip, offset, shift, type Placement } from '@floating-ui/dom'
 import { UsageStore } from './store'
-import { connectionLabel, displayPercent, formatTime, names, warning } from './presentation'
+import { connectionLabel, formatTime, names, remainingText, warning } from './presentation'
 
 export type PopoverMode = 'closed' | 'transient' | 'pinned'
 export type Positioner = (button: HTMLButtonElement, panel: HTMLElement, dismiss: () => void) => () => void
@@ -158,7 +158,8 @@ export class SharedPopover {
       const section = this.doc.createElement('section'), title = this.doc.createElement('h3')
       section.dataset.cuiDetail = kind; title.textContent = names[kind]
       section.append(title); this.body.append(section)
-      line(section, `剩余 ${displayPercent(window.remainingPercent)}${warning(window.remainingPercent) ? ` · ${warning(window.remainingPercent)}` : ''}`)
+      const remaining = remainingText(window.remainingPercent), alert = warning(window.remainingPercent)
+      line(section, `${remaining}${alert && alert !== remaining ? ` · ${alert}` : ''}`)
       line(section, `重置于 ${formatTime(window.resetsAt)}`, true)
     }
     line(this.body, `更新于 ${formatTime(snapshot.fetchedAt)}`, true)

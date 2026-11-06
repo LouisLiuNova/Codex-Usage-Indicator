@@ -159,3 +159,24 @@ test('成功取数的毫秒时间正常显示，刷新说明仅保留每30秒刷
   expect(s.popover.panel.textContent).not.toMatch(/采样|退避重试/)
   s.stop()
 })
+test('额度为零时静态文字与详情显示已经用尽，侧栏数字及可访问状态一致', () => {
+  const s = setup()
+  s.store.accept(s.store.revision, normalize({ rate_limit: {
+    primary_window: { limit_window_seconds: 18000, used_percent: 100, reset_at: 1800000000 },
+    secondary_window: { limit_window_seconds: 604800, used_percent: 25, reset_at: 1800000000 }
+  } }, 'renderer-wham'), 1793928351)
+  s.views.forEach(view => view.update(s.store.snapshot))
+  const composer = s.doc.querySelector<HTMLElement>('[data-cui-view=composer] [data-cui-window=fiveHour]')!
+  const rail = s.doc.querySelector<HTMLButtonElement>('[data-cui-view=rail] [data-cui-window=fiveHour]')!
+  expect(composer.textContent).toContain('已经用尽')
+  expect(composer.textContent).not.toContain('剩余 0%')
+  expect(rail.querySelector('.cui-percent')!.textContent).toBe('0%')
+  expect(rail.title).toBe('已经用尽')
+  expect(rail.getAttribute('aria-label')).toBe('5 小时额度，已经用尽')
+  rail.click()
+  const detail = s.doc.querySelector('[data-cui-detail=fiveHour]')!
+  expect(detail.textContent).toContain('已经用尽')
+  expect(detail.textContent).not.toMatch(/即将用尽|剩余 0%/)
+  expect(s.doc.querySelector('[data-cui-detail=weekly]')!.textContent).toContain('剩余 75%')
+  s.stop()
+})
