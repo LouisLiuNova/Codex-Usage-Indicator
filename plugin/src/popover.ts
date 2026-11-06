@@ -14,13 +14,8 @@ export const positionPopover: Positioner = (button, panel, dismiss) => {
     const current = ++revision
     const doc = panel.ownerDocument, view = doc.defaultView!
     try {
-      // Composer entries sit below the native input. Anchor the card outside that entire native region.
-      const composers = button.closest('[data-cui-view="composer"]')
-        ? [...doc.querySelectorAll<HTMLElement>('[data-codex-composer-root]')].filter(node => node.getBoundingClientRect().width > 0) : []
-      const reference = composers.length === 1
-        ? { contextElement: button, getBoundingClientRect: () => composers[0]!.getBoundingClientRect() } : button
       for (const placement of ['top', 'right', 'left', 'bottom'] as Placement[]) {
-        const position = await computePosition(reference, panel, { strategy: 'fixed', placement,
+        const position = await computePosition(button, panel, { strategy: 'fixed', placement,
           middleware: [offset(10), flip({ padding: 8 }), shift({ padding: 8 })] })
         if (stopped || revision !== current) return
         const rect = { left: position.x, top: position.y, right: position.x + panel.offsetWidth, bottom: position.y + panel.offsetHeight }

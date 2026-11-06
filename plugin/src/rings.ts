@@ -3,7 +3,7 @@ import { connectionLabel, displayPercent, labels, names, warning, type WindowKin
 
 export class RingView {
   readonly root: HTMLDivElement
-  private entries = new Map<WindowKind, { button: HTMLButtonElement; percent: HTMLSpanElement; circle: SVGCircleElement | null; dispose: () => void }>()
+  private entries = new Map<WindowKind, { element: HTMLElement; percent: HTMLSpanElement; circle: SVGCircleElement | null; dispose: () => void }>()
   private status: HTMLSpanElement
   constructor(private doc: Document, private bind: (button: HTMLButtonElement) => () => void, readonly location: 'composer' | 'rail') {
     this.root = doc.createElement('div')
@@ -21,16 +21,15 @@ export class RingView {
       if (!window) {
         if (entry) {
           entry.dispose()
-          restoreFocus ||= this.doc.activeElement === entry.button
-          entry.button.remove(); this.entries.delete(kind)
+          restoreFocus ||= this.doc.activeElement === entry.element
+          entry.element.remove(); this.entries.delete(kind)
         }
         continue
       }
       if (!entry) {
-        const button = this.doc.createElement('button')
-        button.type = 'button'
-        button.className = `cui-trigger cui-${kind}`
-        button.dataset.cuiWindow = kind
+        const element = this.doc.createElement(this.location === 'rail' ? 'button' : 'span')
+        element.className = `${this.location === 'rail' ? 'cui-trigger' : 'cui-value'} cui-${kind}`
+        element.dataset.cuiWindow = kind
         const percent = this.doc.createElement('span')
         percent.className = 'cui-percent'
         const label = this.doc.createElement('span')
@@ -46,25 +45,26 @@ export class RingView {
           track.classList.add('cui-track')
           circle = track.cloneNode() as SVGCircleElement
           circle.classList.remove('cui-track'); circle.classList.add('cui-progress')
-          svg.append(track, circle); ring.append(svg, percent); button.append(ring, label)
-        } else button.append(label, percent)
-        this.root.append(button)
-        entry = { button, percent, circle, dispose: this.bind(button) }
+          svg.append(track, circle); ring.append(svg, percent); element.append(ring, label)
+          element.setAttribute('type', 'button')
+        } else element.append(label, percent)
+        this.root.append(element)
+        entry = { element, percent, circle, dispose: this.location === 'rail' ? this.bind(element as HTMLButtonElement) : () => {} }
         this.entries.set(kind, entry)
       }
       const value = window.remainingPercent
       entry.percent.textContent = this.location === 'composer' ? `剩余 ${value === null ? '未知' : displayPercent(value)}` : displayPercent(value)
       entry.circle?.setAttribute('stroke-dasharray', `${value === null ? 0 : Math.round(value)} 100`)
-      entry.button.setAttribute('aria-label', `${names[kind]}额度，剩余 ${value === null ? '未知' : displayPercent(value)}${warning(value) ? `，${warning(value)}` : ''}`)
-      entry.button.dataset.warning = warning(value) ? 'true' : 'false'
-      entry.button.title = warning(value)
+      entry.element.setAttribute('aria-label', `${names[kind]}额度，剩余 ${value === null ? '未知' : displayPercent(value)}${warning(value) ? `，${warning(value)}` : ''}`)
+      entry.element.dataset.warning = warning(value) ? 'true' : 'false'
+      if (this.location === 'rail') entry.element.title = warning(value)
     }
     this.root.dataset.count = String(this.entries.size)
     this.status.remove()
     if (!this.entries.size) { this.status.textContent = connectionLabel(snapshot); this.root.append(this.status) }
     // Startup/failure is not evidence that the server removed a window. No fabricated windows.
     this.root.setAttribute('aria-label', this.entries.size ? '额度指示器' : snapshot.connection === 'connecting' ? '用量连接中' : '用量暂不可用')
-    if (restoreFocus) this.entries.values().next().value?.button.focus()
+    if (restoreFocus) this.entries.values().next().value?.element.focus()
   }
   stop() {
     for (const entry of this.entries.values()) entry.dispose()

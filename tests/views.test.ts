@@ -28,11 +28,11 @@ test('三处 Weekly-only 完全删除5H，并移除旧按钮而非隐藏占位',
   s.update(false)
   expect(five.isConnected).toBe(false)
   expect(s.doc.querySelector('[data-cui-window=fiveHour]')).toBeNull()
-  const weekly = s.doc.querySelector<HTMLButtonElement>('[data-cui-window=weekly]')!
+  const weekly = s.doc.querySelector<HTMLButtonElement>('[data-cui-view=rail] [data-cui-window=weekly]')!
   weekly.click()
   expect(s.doc.querySelector('[data-cui-detail=fiveHour]')).toBeNull()
   expect(s.doc.querySelector('[data-cui-detail=weekly]')).not.toBeNull()
-  expect(s.doc.querySelectorAll('.cui-trigger').length).toBe(2)
+  expect(s.doc.querySelectorAll('.cui-trigger').length).toBe(1)
   expect(s.store.snapshot).toMatchObject({ status: 'ready', connection: 'connected', quality: 'normal' })
   s.stop()
 })
@@ -45,15 +45,15 @@ test('数字与侧栏圆环共享舍入口径，告警使用原始阈值', () =>
   expect(five.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true')
   s.stop()
 })
-test('四个入口共用一张卡片，固定切换与相同入口解除固定', () => {
+test('侧栏两个入口共用一张卡片，固定切换与相同入口解除固定', () => {
   const s = setup(); s.update()
   const buttons = [...s.doc.querySelectorAll<HTMLButtonElement>('.cui-trigger')]
   buttons[0]!.click(); expect(s.popover.state).toBe('pinned')
-  buttons[3]!.click()
+  buttons[1]!.click()
   expect(s.doc.querySelectorAll('.cui-popover').length).toBe(1)
   expect(buttons[0]!.getAttribute('aria-expanded')).toBe('false')
-  expect(buttons[3]!.getAttribute('aria-expanded')).toBe('true')
-  buttons[3]!.click()
+  expect(buttons[1]!.getAttribute('aria-expanded')).toBe('true')
+  buttons[1]!.click()
   expect(s.popover.state).toBe('closed')
   expect(s.counts()).toEqual({ started: 2, disposed: 2 })
   s.stop()
@@ -77,7 +77,8 @@ test('百分比未知仍保留真实窗口，缺失reset不推算', () => {
   s.store.accept(s.store.revision, normalize({ rate_limit: { primary_window: { limit_window_seconds: 604800, used_percent: null, reset_at: null } } }, 'renderer-wham'), 0)
   s.views.forEach(v => v.update(s.store.snapshot))
   const trigger = s.doc.querySelector<HTMLButtonElement>('.cui-trigger')!
-  expect(trigger.textContent).toContain('未知')
+  expect(trigger.getAttribute('aria-label')).toContain('未知')
+  expect(s.doc.querySelector('[data-cui-view=composer] .cui-percent')!.textContent).toBe('剩余 未知')
   trigger.click()
   expect(s.popover.panel.textContent).toContain('重置于 未知')
   s.stop()
@@ -92,7 +93,25 @@ test('Composer 仅显示文字剩余量，圆环仅存在于侧栏', () => {
   expect(s.doc.querySelectorAll('[data-cui-view=rail] svg').length).toBe(2)
   s.update(false)
   expect(composer.textContent).not.toContain('5H')
-  expect(composer.querySelectorAll('button').length).toBe(1)
+  expect(composer.querySelectorAll('button').length).toBe(0)
+  expect(composer.querySelectorAll('.cui-value').length).toBe(1)
+  s.stop()
+})
+test('Composer为静态文字，不注册详情入口、焦点或原生悬停提示', () => {
+  const s = setup(); s.update()
+  const composer = s.doc.querySelector<HTMLElement>('[data-cui-view=composer]')!
+  expect(composer.querySelector('button,[tabindex],[role=button],[aria-haspopup],[aria-expanded],[aria-controls],[title]')).toBeNull()
+  const value = composer.querySelector<HTMLElement>('.cui-value')!
+  value.click(); value.focus()
+  value.dispatchEvent(new s.win.PointerEvent('pointerenter') as unknown as PointerEvent)
+  expect(s.popover.state).toBe('closed')
+  expect(s.doc.querySelector('.cui-popover')).toBeNull()
+  const rail = s.doc.querySelector<HTMLButtonElement>('[data-cui-view=rail] button')!
+  rail.click()
+  expect(s.popover.state).toBe('pinned')
+  value.click()
+  expect(s.popover.state).toBe('pinned')
+  expect(s.doc.querySelectorAll('.cui-popover').length).toBe(1)
   s.stop()
 })
 test('原生 document 捕获处理器不能先吞掉详情卡片 Escape', () => {
