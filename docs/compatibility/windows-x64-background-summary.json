@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "scope": "Windows x64 historical background observation",
+  "testedCommit": "5d298d9af582a541fe27fdd34e2a458b69d914aa",
+  "startedAt": "2026-11-06T09:24:19.956Z",
+  "endedAt": "2026-11-06T09:54:21.503Z",
+  "elapsedMs": 1801530,
+  "sampleCount": 61,
+  "readySamplesAfterStartup": 60,
+  "visibilityCounts": {
+    "hidden": 61
+  },
+  "finalRequests": 59,
+  "finalScans": 59,
+  "finalObserverNotifications": 8,
+  "observationErrors": 0,
+  "listenerSamples": [
+    {
+      "at": "2026-11-06T09:34:50.492Z",
+      "composerListeners": 0,
+      "railListeners": 12,
+      "ownedDom": [
+        {
+          "location": "rail",
+          "nodes": 14,
+          "buttons": 2
+        },
+        {
+          "location": "composer",
+          "nodes": 6,
+          "buttons": 0
+        }
+      ]
+    },
+    {
+      "at": "2026-11-06T09:51:00.352Z",
+      "composerListeners": 0,
+      "railListeners": 12,
+      "ownedDom": [
+        {
+          "location": "rail",
+          "nodes": 14,
+          "buttons": 2
+        },
+        {
+          "location": "composer",
+          "nodes": 6,
+          "buttons": 0
+        }
+      ]
+    }
+  ],
+  "cleanup": {
+    "runtime": false,
+    "slots": 0,
+    "views": 0,
+    "styles": 0,
+    "popovers": 0
+  },
+  "rawReportSha256": "2c9d1d3afd4c7d49e0999b8965068e33e04620bd581a6331570131590d094a77",
+  "provesCurrentVersionForegroundAcceptance": false
+}

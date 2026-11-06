@@ -1,6 +1,6 @@
 # 第三方许可
 
-开发版详情卡片使用 @floating-ui/dom 1.7.4 及其 @floating-ui/core、@floating-ui/utils 依赖；三者均使用以下 MIT 许可。未来打包包含这些依赖的单文件插件时，须将本文件一并分发。项目自身 LICENSE 保持 Apache-2.0。
+开发版详情卡片使用 @floating-ui/dom 1.7.4 及其 @floating-ui/core、@floating-ui/utils 依赖；三者均使用以下 MIT 许可。当前构建已将本文件复制到包含这些依赖的插件目录，后续分发仍须保留。项目自身 LICENSE 保持 Apache-2.0。
 
 MIT License
 
