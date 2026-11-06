@@ -162,7 +162,7 @@ export class SharedPopover {
       line(section, `重置于 ${formatTime(window.resetsAt)}`, true)
     }
     line(this.body, `更新于 ${formatTime(snapshot.fetchedAt)}`, true)
-    line(this.body, '每 30 秒采样；连接异常时退避重试', true)
+    line(this.body, '每 30 秒刷新', true)
   }
   stop() {
     if (this.stopped) return

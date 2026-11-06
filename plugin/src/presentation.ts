@@ -1,5 +1,5 @@
 import type { UsageSnapshot } from './store'
-import { unixSeconds } from './usage'
+import { finite } from './usage'
 
 export type WindowKind = 'fiveHour' | 'weekly'
 export const labels = { fiveHour: '5H', weekly: 'WEEK' } as const
@@ -8,8 +8,9 @@ export const displayPercent = (value: number | null) => value === null ? '—' :
 export const warning = (value: number | null) => value === null ? '额度未知' : value >= 50 ? ''
   : value >= 20 ? '余量偏低' : value >= 10 ? '余量很低' : '即将用尽'
 export function formatTime(seconds: number | null, timeZone?: string) {
-  if (!unixSeconds(seconds)) return '未知'
+  if (!finite(seconds) || seconds < 0) return '未知'
   const date = new Date(seconds * 1000)
+  if (!Number.isFinite(date.getTime())) return '未知'
   const parts = new Intl.DateTimeFormat('en-US', { ...(timeZone ? { timeZone } : {}), year: 'numeric',
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'longOffset' }).formatToParts(date)
   const get = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value ?? ''

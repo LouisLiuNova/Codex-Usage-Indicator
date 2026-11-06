@@ -20,3 +20,10 @@ test('纽约夏令时重复小时仍以 offset 区分', () => {
   expect(formatTime(before, 'America/New_York')).toContain('01:30 · UTC-04:00')
   expect(formatTime(after, 'America/New_York')).toContain('01:30 · UTC-05:00')
 })
+test('本地取得时间保留毫秒精度，显示仍为正常绝对时间', () => {
+  const seconds = Date.parse('2026-11-06T10:53:00.487Z') / 1000
+  expect(formatTime(seconds, 'Asia/Shanghai')).toBe('Nov 6, 2026 · 18:53 · UTC+08:00')
+})
+test.each([NaN, Infinity, -Infinity, -0.1, 8_640_000_000_001])('无效时间 %p 仍显示未知', seconds => {
+  expect(formatTime(seconds, 'Asia/Shanghai')).toBe('未知')
+})
