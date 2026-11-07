@@ -18,9 +18,9 @@ export const styles = `
 .cui-ring svg{width:100%;height:100%;transform:rotate(-90deg);grid-area:1/1}
 .cui-track{stroke:color-mix(in srgb,currentColor 12%,transparent)}
 .cui-progress{stroke:var(--cui-accent);stroke-linecap:round}
-/* NIPPON COLORS: SABIASAGI, SHION, CHOJIZOME, SUOH / NAKABENI. */
+/* NIPPON COLORS: SABIONANDO / SABIASAGI, FUJINEZUMI / SHION, CHOJIZOME, SUOH / NAKABENI. */
 .cui-rings{--cui-accent-low:#b07736;--cui-accent-critical:light-dark(#8e354a,#db4d6d)}
-.cui-fiveHour{--cui-accent:#6699a1}.cui-weekly{--cui-accent:#8f77b5}
+.cui-fiveHour{--cui-accent:light-dark(#336774,#6699a1)}.cui-weekly{--cui-accent:light-dark(#6e75a4,#8f77b5)}
 .cui-rail .cui-trigger[data-usage-level=low]{--cui-accent:var(--cui-accent-low)}
 .cui-rail .cui-trigger[data-usage-level=critical]{--cui-accent:var(--cui-accent-critical)}
 .cui-rail .cui-trigger[data-usage-level=low] .cui-track{stroke:color-mix(in srgb,var(--cui-accent) 24%,transparent)}

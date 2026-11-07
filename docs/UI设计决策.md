@@ -26,13 +26,15 @@
 
 | 用途 | 官网色名 | 色值 |
 | --- | --- | --- |
-| 5H正常 | [錆浅葱 SABIASAGI](https://nipponcolors.com/#sabiasagi) | `#6699A1` |
-| WEEK正常 | [紫苑 SHION](https://nipponcolors.com/#shion) | `#8F77B5` |
+| 5H正常，浅色主题 | [錆御納戸 SABIONANDO](https://nipponcolors.com/#sabionando) | `#336774` |
+| WEEK正常，浅色主题 | [藤鼠 FUJINEZUMI](https://nipponcolors.com/#fujinezumi) | `#6E75A4` |
+| 5H正常，深色主题 | [錆浅葱 SABIASAGI](https://nipponcolors.com/#sabiasagi) | `#6699A1` |
+| WEEK正常，深色主题 | [紫苑 SHION](https://nipponcolors.com/#shion) | `#8F77B5` |
 | <30%茶金/琥珀 | [丁子染 CHOJIZOME](https://nipponcolors.com/#chojizome) | `#B07736` |
 | <10%红，浅色主题 | [蘇芳 SUOH](https://nipponcolors.com/#suoh) | `#8E354A` |
 | <10%红，深色主题 | [中紅 NAKABENI](https://nipponcolors.com/#nakabeni) | `#DB4D6D` |
 
-色值取自官网当前色卡接口，与网页所用RGB一致；未对原色追加透明度来降低饱和感。主圆环色对浅色`#FFFFFF`/深色`#171821`背景的计算对比度均≥3:1；红色告警色在对应背景约7.61:1/4.45:1。此处仅记录这些色对，不宣称完整无障碍验收通过。
+正常色按宿主`color-scheme`切换：亮色使用较深的錆御納戸/藤鼠，暗色使用较亮的錆浅葱/紫苑，避免白底显淡或黑底过暗；应用主题优先于系统偏好。色值取自官网当前色卡接口，与网页所用RGB一致；未对原色追加透明度来降低饱和感。正常5H/WEEK主圆环色在浅色`#FFFFFF`背景对比度约6.30:1/4.43:1，在深色`#171821`背景约5.58:1/4.60:1；全部主圆环色在对应背景均≥3:1；红色告警色在对应背景约7.61:1/4.45:1。此处仅记录这些色对，不宣称完整无障碍验收通过。
 
 ## 本次阈值验收
 

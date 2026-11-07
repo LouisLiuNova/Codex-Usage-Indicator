@@ -25,13 +25,16 @@ try {
       await evaluate(`__ringColors.update(${kind === 'fiveHour' ? JSON.stringify(value) : 75},${kind === 'weekly' ? JSON.stringify(value) : 75})`)
       const entries = await evaluate('__ringColors.snapshot()'), current = entries.find(e => e.kind === kind), other = entries.find(e => e.kind !== kind)
       const level = value === null || value >= 30 ? 'normal' : value >= 10 ? 'low' : 'critical'
-      const normal = kind === 'fiveHour' ? 'rgb(102, 153, 161)' : 'rgb(143, 119, 181)'
+      const normalColor = window => window === 'fiveHour'
+        ? (theme === 'light' ? 'rgb(51, 103, 116)' : 'rgb(102, 153, 161)')
+        : (theme === 'light' ? 'rgb(110, 117, 164)' : 'rgb(143, 119, 181)')
+      const normal = normalColor(kind)
       const expected = level === 'normal' ? normal : level === 'low' ? 'rgb(176, 119, 54)'
         : theme === 'light' ? 'rgb(142, 53, 74)' : 'rgb(219, 77, 109)'
       const marker = level === 'critical', title = value === null ? '额度未知' : value === 0 ? '已经用尽' : marker ? '即将用尽' : ''
       const passed = current.stroke === expected && current.level === level && current.warning === String(marker)
         && current.marker.includes('!') === marker && (!marker || current.markerColor === expected) && current.title === title
-        && current.scheme === theme && other.level === 'normal' && other.warning === 'false'
+        && current.scheme === theme && other.level === 'normal' && other.warning === 'false' && other.stroke === normalColor(other.kind)
       report.cases.push({ theme, kind, value, expected, passed, current })
     }
     if (output) {
