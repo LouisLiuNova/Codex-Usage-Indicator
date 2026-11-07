@@ -18,10 +18,13 @@ export const styles = `
 .cui-ring svg{width:100%;height:100%;transform:rotate(-90deg);grid-area:1/1}
 .cui-track{stroke:color-mix(in srgb,currentColor 12%,transparent)}
 .cui-progress{stroke:var(--cui-accent);stroke-linecap:round}
-.cui-fiveHour{--cui-accent:#0891b2}.cui-weekly{--cui-accent:#8b5cf6}
-.cui-rail .cui-trigger[data-usage-level=low]{--cui-accent:var(--color-token-text-warning,light-dark(#b45309,#fbbf24))}
-.cui-rail .cui-trigger[data-usage-level=critical]{--cui-accent:var(--color-token-text-error,light-dark(#dc2626,#f87171))}
-.cui-rail .cui-trigger:is([data-usage-level=low],[data-usage-level=critical]) .cui-track{stroke:color-mix(in srgb,var(--cui-accent) 24%,transparent)}
+/* NIPPON COLORS: SABIASAGI, SHION, CHOJIZOME, SUOH / NAKABENI. */
+.cui-rings{--cui-accent-low:#b07736;--cui-accent-critical:light-dark(#8e354a,#db4d6d)}
+.cui-fiveHour{--cui-accent:#6699a1}.cui-weekly{--cui-accent:#8f77b5}
+.cui-rail .cui-trigger[data-usage-level=low]{--cui-accent:var(--cui-accent-low)}
+.cui-rail .cui-trigger[data-usage-level=critical]{--cui-accent:var(--cui-accent-critical)}
+.cui-rail .cui-trigger[data-usage-level=low] .cui-track{stroke:color-mix(in srgb,var(--cui-accent) 24%,transparent)}
+.cui-rail .cui-trigger[data-usage-level=critical] .cui-track{stroke:color-mix(in srgb,var(--cui-accent) 36%,transparent)}
 .cui-percent{grid-area:1/1;font-size:10px;line-height:1;font-weight:600;font-variant-numeric:tabular-nums}
 .cui-window-label{font-size:9px;line-height:12px;font-weight:600;letter-spacing:.04em}
 .cui-rail .cui-trigger[data-warning=true] .cui-window-label::after{content:' !';color:var(--cui-accent)}

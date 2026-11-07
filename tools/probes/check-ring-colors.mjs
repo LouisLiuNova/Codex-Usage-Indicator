@@ -25,9 +25,9 @@ try {
       await evaluate(`__ringColors.update(${kind === 'fiveHour' ? JSON.stringify(value) : 75},${kind === 'weekly' ? JSON.stringify(value) : 75})`)
       const entries = await evaluate('__ringColors.snapshot()'), current = entries.find(e => e.kind === kind), other = entries.find(e => e.kind !== kind)
       const level = value === null || value >= 30 ? 'normal' : value >= 10 ? 'low' : 'critical'
-      const normal = kind === 'fiveHour' ? 'rgb(8, 145, 178)' : 'rgb(139, 92, 246)'
-      const expected = level === 'normal' ? normal : level === 'low' ? (theme === 'light' ? 'rgb(180, 83, 9)' : 'rgb(251, 191, 36)')
-        : theme === 'light' ? 'rgb(220, 38, 38)' : 'rgb(248, 113, 113)'
+      const normal = kind === 'fiveHour' ? 'rgb(102, 153, 161)' : 'rgb(143, 119, 181)'
+      const expected = level === 'normal' ? normal : level === 'low' ? 'rgb(176, 119, 54)'
+        : theme === 'light' ? 'rgb(142, 53, 74)' : 'rgb(219, 77, 109)'
       const marker = level === 'critical', title = value === null ? '额度未知' : value === 0 ? '已经用尽' : marker ? '即将用尽' : ''
       const passed = current.stroke === expected && current.level === level && current.warning === String(marker)
         && current.marker.includes('!') === marker && (!marker || current.markerColor === expected) && current.title === title
