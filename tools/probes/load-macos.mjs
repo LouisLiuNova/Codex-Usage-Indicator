@@ -109,6 +109,7 @@ export async function main(args) {
   const stop = () => abort.abort()
   process.once('SIGINT', stop); process.once('SIGTERM', stop)
   let runtime
+  let failed = false
   const once = mode === '--once' || mode === '--wait-once'
   try {
     if (existing.length && (mode === '--start' || mode === '--once')) { await state('client-running'); process.exitCode = 1; return }
@@ -141,13 +142,15 @@ export async function main(args) {
     await state('running', { port: runtime.port, enabledScripts: snapshot.enabledScripts })
     await runtime.run({ signal: abort.signal })
   } catch (error) {
+    failed = !abort.signal.aborted
     const known = ['exit-wait-expired']
     await state(abort.signal.aborted ? 'stopped' : 'failed', { code: known.includes(error.message) ? error.message : 'loader-start-or-run' })
     if (!abort.signal.aborted) process.exitCode = 1
   } finally {
     try { await runtime?.close() } finally {
       process.off('SIGINT', stop); process.off('SIGTERM', stop)
-      if (runtime) await state('stopped')
+      // Cleanup must not replace a failure's terminal status and diagnostic code.
+      if (runtime && !failed) await state('stopped')
     }
   }
 }
