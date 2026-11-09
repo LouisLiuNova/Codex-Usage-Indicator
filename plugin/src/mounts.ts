@@ -1,11 +1,11 @@
-import { inspectAnchor, mountContent, visible, type AnchorResult } from './adapters/dom'
+import { inspectAnchor, isThreadComposer, mountContent, visible, type AnchorResult } from './adapters/dom'
 import { RingView } from './rings'
 import type { SharedPopover } from './popover'
 import type { UsageStore } from './store'
 
 const selectors = '[data-codex-composer-root],nav[data-app-navigation-rail]'
 const own = '[data-cui-slot],[data-cui-view],.cui-popover,style[data-cui-style]'
-const attributes = ['hidden', 'inert', 'aria-hidden', 'style', 'class', 'data-codex-composer-root', 'data-app-navigation-rail']
+const attributes = ['hidden', 'inert', 'aria-hidden', 'style', 'class', 'data-codex-composer-root', 'data-app-navigation-rail', 'data-thread-scroll-footer', 'data-thread-find-composer']
 type Slot = NonNullable<ReturnType<typeof mountContent>>
 interface Binding { kind: 'composer' | 'rail'; view: RingView; slot: Slot | null; target: HTMLElement | null; height: number; code: AnchorResult['code'] }
 
@@ -74,6 +74,7 @@ export class MountManager {
       const rect = binding.target?.getBoundingClientRect()
       const matches = live.filter(node => node.matches(binding.kind === 'composer' ? '[data-codex-composer-root]' : 'nav[data-app-navigation-rail]'))
       if (!force && binding.slot?.root.isConnected && binding.target?.isConnected && rect && rect.width > 0 && rect.height > 0
+        && (binding.kind !== 'composer' || isThreadComposer(binding.target))
         && height === binding.height && matches.length === 1 && matches[0] === binding.target) continue
       const focused = binding.view.root.contains(this.doc.activeElement) ? this.doc.activeElement as HTMLElement : null
       binding.slot?.stop(); binding.slot = null; binding.target = null
