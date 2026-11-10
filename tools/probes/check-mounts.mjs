@@ -51,6 +51,8 @@ try {
   await stage('ambiguity-rejected', 'revealDuplicate', value => value.slots === 1 && value.adapters.some(a => a.kind === 'composer' && a.code === 'ambiguity'))
   await stage('ambiguity-recovered', 'removeDuplicate', value => value.slots === 2)
   await stage('removed-slot-recovered', 'removeSlot', value => value.slots === 2 && value.scans > report.checks['ambiguity-recovered'].scans)
+  await stage('new-page-cleanup', 'leaveThread', value => value.slots === 1 && value.adapters.some(a => a.kind === 'composer' && a.code === 'context'))
+  await stage('thread-restored', 'enterThread', value => value.slots === 2)
   report.status = 'passed'; delete report.code
 } catch { process.exitCode = 1 }
 finally {

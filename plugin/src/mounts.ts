@@ -5,7 +5,7 @@ import type { UsageStore } from './store'
 
 const selectors = '[data-codex-composer-root],nav[data-app-navigation-rail]'
 const own = '[data-cui-slot],[data-cui-view],.cui-popover,style[data-cui-style]'
-const attributes = ['hidden', 'inert', 'aria-hidden', 'style', 'class', 'data-codex-composer-root', 'data-app-navigation-rail']
+const attributes = ['hidden', 'inert', 'aria-hidden', 'style', 'class', 'data-codex-composer-root', 'data-app-navigation-rail', 'data-thread-scroll-footer', 'data-thread-find-composer']
 type Slot = NonNullable<ReturnType<typeof mountContent>>
 interface Binding { kind: 'composer' | 'rail'; view: RingView; slot: Slot | null; target: HTMLElement | null; height: number; code: AnchorResult['code'] }
 

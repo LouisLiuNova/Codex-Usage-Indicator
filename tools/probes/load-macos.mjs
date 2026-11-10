@@ -70,7 +70,7 @@ export async function main(args) {
   if (mode === '--check') { await state('ready', { runningProcesses: existing.length, restartRequired: existing.length > 0 }); return }
   const abort = new AbortController(), stop = () => abort.abort()
   process.once('SIGINT', stop); process.once('SIGTERM', stop)
-  let resident, watcher, metricsTimer, port, publishing = false, writes = Promise.resolve()
+  let resident, watcher, metricsTimer, port, failed = false, publishing = false, writes = Promise.resolve()
   const publish = (status, extra) => { writes = writes.then(() => state(status, extra)).catch(() => {}) }
   try {
     if (mode === '--watch') {
@@ -134,6 +134,9 @@ export async function main(args) {
     })
     await writeMetrics()
   } catch (error) {
+    failed = !abort.signal.aborted
+    publishing = false
+    await writes
     const known = ['exit-wait-expired', 'document-not-stable', 'client-not-running', 'port']
     await state(abort.signal.aborted ? 'stopped' : 'failed', { code: known.includes(error.message) ? error.message : 'loader-start-or-run' })
     if (!abort.signal.aborted) process.exitCode = 1
@@ -145,7 +148,7 @@ export async function main(args) {
     finally {
       await writes
       process.off('SIGINT', stop); process.off('SIGTERM', stop)
-      if (resident) await state('stopped', { port, cleanup: cleaned })
+      if (resident && !failed) await state('stopped', { port, cleanup: cleaned })
     }
   }
 }

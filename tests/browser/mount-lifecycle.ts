@@ -22,7 +22,7 @@ export function createMountLifecycleFixture(host: Document) {
     const doc = iframe.contentDocument
     if (!doc?.defaultView) throw new Error('fixture-document')
     doc.body.style.margin = '0'
-    doc.body.innerHTML = '<main style="position:absolute;left:200px;top:400px;width:600px"><div data-codex-composer-root hidden style="height:160px;width:600px"><textarea style="width:580px;height:100px;margin:10px"></textarea></div></main><nav data-app-navigation-rail style="position:absolute;left:0;top:0;width:68px;height:700px"></nav>'
+    doc.body.innerHTML = '<main data-thread-scroll-footer="true" data-thread-find-composer="true" style="position:absolute;left:200px;top:400px;width:600px"><div data-codex-composer-root hidden style="height:160px;width:600px"><textarea style="width:580px;height:100px;margin:10px"></textarea></div></main><nav data-app-navigation-rail style="position:absolute;left:0;top:0;width:68px;height:700px"></nav>'
     const style = doc.createElement('style'); style.textContent = styles; doc.head.append(style)
     const store = new UsageStore()
     const refresh = () => store.accept(store.revision, normalize({ rate_limit: { primary_window: {
@@ -47,6 +47,8 @@ export function createMountLifecycleFixture(host: Document) {
         const aside = doc.createElement('aside'); aside.append(duplicate); doc.body.append(aside)
       },
       revealDuplicate() { duplicate!.hidden = false },
+      leaveThread() { doc.querySelector('main')!.removeAttribute('data-thread-scroll-footer') },
+      enterThread() { doc.querySelector('main')!.setAttribute('data-thread-scroll-footer', 'true') },
       removeSlot() { doc.querySelector('[data-cui-slot=composer]')!.remove() },
       removeDuplicate() { duplicate!.remove() },
       stop

@@ -1,4 +1,4 @@
-export type AnchorCode = 'ready' | 'missing' | 'ambiguity' | 'space' | 'overlay' | 'structure'
+export type AnchorCode = 'ready' | 'missing' | 'ambiguity' | 'space' | 'overlay' | 'structure' | 'context'
 export interface AnchorResult { kind: 'composer' | 'rail'; code: AnchorCode; candidates: number; adapter: string; target: HTMLElement | null }
 export function visible(element: HTMLElement): boolean {
   const style = element.ownerDocument.defaultView!.getComputedStyle(element)
@@ -39,6 +39,12 @@ function composerFlow(node: HTMLElement, reserve = 56): boolean {
     && footer.contains(flow) && !!area && node.getBoundingClientRect().top - reserve - 8 >= area.top + 80
 }
 
+// Landing composers have no active thread context; never reserve space on new pages.
+export function isThreadComposer(node: HTMLElement): boolean {
+  return !!node.closest('[data-thread-scroll-footer="true"]')
+    && !!node.closest('[data-thread-find-composer="true"]')
+}
+
 export function inspectAnchor(doc: Document, kind: 'composer' | 'rail', reservedHeight?: number, mounted?: HTMLElement): AnchorResult {
   const attached = !!mounted?.isConnected
   const reserve = attached ? 0 : reservedHeight ?? 56
@@ -52,6 +58,7 @@ export function inspectAnchor(doc: Document, kind: 'composer' | 'rail', reserved
   const r = node.getBoundingClientRect(), view = doc.defaultView!
   if (r.left < 0 || r.top < 0 || r.right > view.innerWidth || r.bottom > view.innerHeight) return result('space')
   if (kind === 'composer') {
+    if (!isThreadComposer(node)) return result('context')
     const marked = [...node.querySelectorAll<HTMLElement>('[data-codex-composer]')]
     // Native goal/accessory editors may share this outer root. Prefer the explicit prompt marker;
     // a present but hidden/invalid marker must never fall back to an unrelated editor.

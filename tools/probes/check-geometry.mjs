@@ -20,10 +20,16 @@ try {
   for (const width of [640, 1000, 1440]) for (const scale of [1, 2]) for (const theme of ['light', 'dark']) for (const mode of ['home', 'thread']) {
     await session.sendCommand('Emulation.setDeviceMetricsOverride', { width, height: 800, deviceScaleFactor: scale, mobile: false })
     await evaluate(`globalThis.__geometry=__geometryModule.createGeometryFixture(document,${JSON.stringify(mode)},${JSON.stringify(theme)})`)
-    await wait(150)
+    // Wait for the initial scheduled mount; headless background timers can exceed 150ms.
+    for (let attempt = 0; attempt < 30; attempt++) {
+      if (await evaluate('__geometry.snapshot().runtime.ui.scans > 0')) break
+      await wait(100)
+    }
     for (let i = 0; i < 6; i++) { await evaluate('__geometry.mutate()'); await wait(80) }
     const result = await evaluate('__geometry.snapshot()')
-    const passed = result?.runtime?.ui?.slots === 2 && result.sameSlot && result.replacements === 0 && result.aligned
+    const passed = mode === 'home'
+      ? result?.runtime?.ui?.slots === 1 && result.runtime.ui.adapters.some(a => a.kind === 'composer' && a.code === 'context') && result.overlap === null && result.replacements === 0
+      : result?.runtime?.ui?.slots === 2 && result.sameSlot && result.replacements === 0 && result.aligned
       && result.overlap === 12 && result.textBelow && result.upperEdgeHidden && result.joinedEdge && result.nativeAbove && result.viewport
     report.cases.push({ width, scale, theme, mode, passed, result })
     if (width === 1000 && scale === 1 && mode === 'thread' && theme === 'dark' && output) {

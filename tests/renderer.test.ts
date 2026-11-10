@@ -55,7 +55,7 @@ describe('能力发现边界', () => {
 
 function dom() {
   const win = new Window({ width: 900, height: 800 })
-  win.document.body.innerHTML = '<main><div data-codex-composer-root><textarea></textarea></div></main><nav data-app-navigation-rail></nav>'
+  win.document.body.innerHTML = '<main data-thread-scroll-footer="true" data-thread-find-composer="true"><div data-codex-composer-root><textarea></textarea></div></main><nav data-app-navigation-rail></nav>'
   const doc = win.document as unknown as Document
   function box(el: Element, left: number, top: number, width: number, height: number) {
     el.getBoundingClientRect = () => ({ x: left, y: top, left, top, width, height, right: left + width, bottom: top + height, toJSON() {} })
@@ -99,6 +99,19 @@ describe('挂载前置条件与生命周期', () => {
     const result = inspectAnchor(doc, 'composer')
     expect(result.code).toBe(code)
     expect(mountMarker(result)).toBeNull()
+    win.close()
+  })
+  test.each(['Work 新建窗口', 'Codex 新聊天'])('%s 不挂载输入框额度栏，已有聊天可恢复', () => {
+    const { win, doc } = dom()
+    const main = doc.querySelector('main')!
+    main.removeAttribute('data-thread-scroll-footer')
+    main.removeAttribute('data-thread-find-composer')
+    expect(inspectAnchor(doc, 'composer').code).toBe('context')
+    expect(mountMarker(inspectAnchor(doc, 'composer'))).toBeNull()
+    expect(inspectAnchor(doc, 'rail').code).toBe('ready')
+    main.setAttribute('data-thread-scroll-footer', 'true')
+    main.setAttribute('data-thread-find-composer', 'true')
+    expect(inspectAnchor(doc, 'composer').code).toBe('ready')
     win.close()
   })
   test('宽侧栏不冒充 icon rail', () => {
