@@ -2,6 +2,9 @@
 import path from 'node:path'
 import { homedir } from 'node:os'
 import { readFile, writeFile, realpath, mkdir } from 'node:fs/promises'
+import { watch } from 'node:fs'
+import { ResidentInjector } from './resident.mjs'
+import { waitForStableDocument } from './recovery.mjs'
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -47,110 +50,105 @@ export async function inspectLoader(loaderRoot, dataRoot) {
 
 export async function main(args) {
   const [mode, loaderRoot, dataRoot, outputRoot, portText] = args
-  if (!['--check', '--start', '--wait', '--once', '--wait-once', '--inject-once'].includes(mode) || !loaderRoot || !dataRoot || !outputRoot)
+  if (!['--check', '--start', '--wait', '--watch'].includes(mode) || !loaderRoot || !dataRoot || !outputRoot)
     throw new Error('arguments')
   const { app, registry, platform, load } = await inspectLoader(loaderRoot, dataRoot)
   await mkdir(outputRoot, { recursive: true })
   const stateFile = path.join(outputRoot, 'macos-loader-state.json')
   const state = async (status, extra = {}) => {
-    const value = { schemaVersion: 1, status, workerPid: process.pid, appVersion: app.version,
-      at: new Date().toISOString(), ...extra }
+    const value = { schemaVersion: 2, status, workerPid: process.pid, appVersion: app.version,
+      at: new Date().toISOString(), persistentHost: mode !== '--check', ...extra }
     await writeFile(stateFile, JSON.stringify(value, null, 2), { mode: 0o600 })
     console.log(JSON.stringify(value))
   }
-  // A second worker must not start a second managed instance or replace the first worker's state.
   const previous = await readFile(stateFile, 'utf8').then(JSON.parse).catch(() => null)
-  if (previous?.workerPid && previous.workerPid !== process.pid && ['waiting-for-exit', 'starting', 'running'].includes(previous.status)) {
+  if (previous?.workerPid && previous.workerPid !== process.pid && ['waiting-for-exit', 'starting', 'running', 'degraded'].includes(previous.status)) {
     try { process.kill(previous.workerPid, 0); throw new Error('worker-already-running') }
     catch (error) { if (error.code !== 'ESRCH') throw error }
   }
   let existing = await platform.listMacCodexProcesses(app)
-  if (mode === '--inject-once') {
-    const port = Number(portText)
-    if (!/^\d{1,5}$/.test(portText ?? '') || port < 1 || port > 65535) throw new Error('port')
-    const listeners = await platform.listMacLoopbackListeners(port)
-    // macOS child helpers outside the app bundle can inherit the listening descriptor.
-    const rows = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 })
-      .trim().split('\n').map(line => line.trim().split(/\s+/u).map(Number))
-    const managed = processFamily(existing.map(p => p.processId), rows)
-    if (!listeners.length || listeners.some(p => !managed.has(p.processId))) throw new Error('listener-owner')
-    const { listTargets, pickCodexTargets, connectCdpSession, CdpInjector, assertLoopbackEndpoint } = await load('cdp.mjs')
-    const targets = pickCodexTargets(await listTargets(port))
-    if (targets.length !== 1) throw new Error('target')
-    const sessionFactory = endpoint => {
-      if (Number(assertLoopbackEndpoint(endpoint).port) !== port) throw new Error('endpoint-port')
-      return connectCdpSession(endpoint)
-    }
-    const { descriptors, safeMode } = await registry.buildPlan()
-    if (safeMode || descriptors.length !== 1 || descriptors[0].id !== pluginId) throw new Error('plan')
-    // Only bootstrap + this dom-only package. No disconnected settings/composer/host UI.
-    const { buildBootstrapSource, buildLifecycleSyncSource, wrapScript, buildRuntimeSnapshotSource } = await load('injection.mjs')
-    const source = [buildBootstrapSource(), buildLifecycleSyncSource(descriptors), wrapScript(descriptors[0]), buildRuntimeSnapshotSource()].join('\n')
-    const injector = new CdpInjector({ targetProvider: async () => targets, sessionFactory })
-    await injector.inject(source)
-    // Check the current document after async startup instead of trusting an early injection receipt.
-    await delay(1500)
-    const current = pickCodexTargets(await listTargets(port))
-    if (current.length !== 1 || current[0].id !== targets[0].id) throw new Error('target-changed')
-    const session = await sessionFactory(current[0].webSocketDebuggerUrl)
-    try {
-      const result = await session.sendCommand('Runtime.evaluate', { expression: 'globalThis.__codexUsageIndicatorRuntime?.inspect()??null', returnByValue: true })
-      const status = result.result?.value
-      if (!status?.active) throw new Error('runtime-missing')
-      await state('injected', { port, persistentHost: false, runtime: status })
-    } finally { await session.close() }
-    return
-  }
-  if (mode === '--check') {
-    await state('ready', { runningProcesses: existing.length, restartRequired: existing.length > 0 })
-    return
-  }
-  const abort = new AbortController()
-  const stop = () => abort.abort()
+  if (mode === '--check') { await state('ready', { runningProcesses: existing.length, restartRequired: existing.length > 0 }); return }
+  const abort = new AbortController(), stop = () => abort.abort()
   process.once('SIGINT', stop); process.once('SIGTERM', stop)
-  let runtime
-  let failed = false
-  const once = mode === '--once' || mode === '--wait-once'
+  let resident, watcher, metricsTimer, port, failed = false, publishing = false, writes = Promise.resolve()
+  const publish = (status, extra) => { writes = writes.then(() => state(status, extra)).catch(() => {}) }
   try {
-    if (existing.length && (mode === '--start' || mode === '--once')) { await state('client-running'); process.exitCode = 1; return }
-    if (existing.length) {
-      await state('waiting-for-exit')
-      const until = Date.now() + 30 * 60_000
-      while (existing.length) {
-        if (Date.now() >= until) throw new Error('exit-wait-expired')
-        await delay(1000, undefined, { signal: abort.signal })
-        existing = await platform.listMacCodexProcesses(app)
+    if (mode === '--watch') {
+      port = Number(portText)
+      if (!/^\d{1,5}$/.test(portText ?? '') || port < 1 || port > 65535) throw new Error('port')
+      if (!existing.length) throw new Error('client-not-running')
+    } else {
+      if (existing.length && mode === '--start') { await state('client-running'); process.exitCode = 1; return }
+      if (existing.length) {
+        await state('waiting-for-exit')
+        const until = Date.now() + 30 * 60_000
+        while (existing.length) {
+          if (Date.now() >= until) throw new Error('exit-wait-expired')
+          await delay(1000, undefined, { signal: abort.signal })
+          existing = await platform.listMacCodexProcesses(app)
+        }
       }
+      const { allocateLoopbackPort, waitForCdpReady } = await load('live-runtime.mjs')
+      const { buildChromiumDebugArgs } = await load('launcher.mjs')
+      port = await allocateLoopbackPort()
+      await state('starting', { port })
+      await platform.activateMacCodex(app, buildChromiumDebugArgs(port))
+      await waitForCdpReady(port, { signal: abort.signal })
     }
-    if (abort.signal.aborted) return
-    await state('starting')
-    const { startMacLiveRuntime } = await load('live-runtime.mjs')
-    runtime = await startMacLiveRuntime({ dataRoot: path.resolve(dataRoot), signal: abort.signal,
-      dependencies: { discoverMacCodex: async () => app, listMacCodexProcesses: platform.listMacCodexProcesses } })
-    // Upstream enforces loopback listener ownership and the exact app renderer target.
-    const snapshot = runtime.supervisor.snapshot()
-    if (snapshot.phase !== 'healthy' || snapshot.scriptStatuses.length !== 1
-      || snapshot.scriptStatuses[0].id !== pluginId || snapshot.scriptStatuses[0].status !== 'running')
-      throw new Error('injection-failed')
-    if (once) {
-      // Leave the renderer-owned plugin alive, but release all Node host bridges and sockets.
-      await runtime.close()
-      await state('injected', { port: runtime.port, enabledScripts: snapshot.enabledScripts, persistentHost: false })
-      runtime = undefined
-      return
+    const { listTargets, pickCodexTargets, connectCdpSession, assertLoopbackEndpoint } = await load('cdp.mjs')
+    const injection = await load('injection.mjs')
+    const resolveTarget = async () => {
+      const processes = await platform.listMacCodexProcesses(app)
+      const listeners = await platform.listMacLoopbackListeners(port)
+      const rows = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 })
+        .trim().split('\n').map(line => line.trim().split(/\s+/u).map(Number))
+      const managed = processFamily(processes.map(p => p.processId), rows)
+      if (!listeners.length || listeners.some(p => !managed.has(p.processId))) throw new Error('listener-owner')
+      const targets = pickCodexTargets(await listTargets(port))
+      if (targets.length !== 1) throw new Error('target')
+      if (Number(assertLoopbackEndpoint(targets[0].webSocketDebuggerUrl).port) !== port) throw new Error('endpoint-port')
+      return targets[0]
     }
-    await state('running', { port: runtime.port, enabledScripts: snapshot.enabledScripts })
-    await runtime.run({ signal: abort.signal })
+    resident = new ResidentInjector({ resolveTarget, connect: connectCdpSession, injection,
+      getPlan: async () => { await registry.reloadConfig(); return (await registry.buildPlan()).descriptors },
+      onState: (status, snapshot) => { if (publishing) publish(status, { port, reloadRecovery: true, ...snapshot }) } })
+    // fs.watch is an optimization; the 60s plan refresh remains the fallback after watch failures.
+    try {
+      watcher = watch(path.resolve(dataRoot), { recursive: true }, () => resident.notify(true))
+      watcher.on('error', () => { watcher?.close(); watcher = undefined })
+    } catch { /* File-system watching is unavailable on some hosts. */ }
+    await resident.start()
+    const verified = await waitForStableDocument(() => resident.sync(), { signal: abort.signal, timeoutMs: 60000 })
+    publishing = true
+    await state('running', { port, reloadRecovery: true, ...resident.snapshot(), runtime: verified.runtime })
+    const writeMetrics = async () => writeFile(path.join(outputRoot, 'macos-loader-metrics.json'), JSON.stringify({
+      at: new Date().toISOString(), pid: process.pid, uptimeSeconds: process.uptime(),
+      cpu: process.cpuUsage(), memory: process.memoryUsage(), scope: 'node-self-excludes-child-process-cpu',
+      ...resident.snapshot()
+    }, null, 2), { mode: 0o600 })
+    await writeMetrics()
+    metricsTimer = setInterval(() => { void writeMetrics().catch(() => {}) }, 15000)
+    await new Promise(resolve => {
+      if (abort.signal.aborted) resolve()
+      else abort.signal.addEventListener('abort', resolve, { once: true })
+    })
+    await writeMetrics()
   } catch (error) {
     failed = !abort.signal.aborted
-    const known = ['exit-wait-expired']
+    publishing = false
+    await writes
+    const known = ['exit-wait-expired', 'document-not-stable', 'client-not-running', 'port']
     await state(abort.signal.aborted ? 'stopped' : 'failed', { code: known.includes(error.message) ? error.message : 'loader-start-or-run' })
     if (!abort.signal.aborted) process.exitCode = 1
   } finally {
-    try { await runtime?.close() } finally {
+    publishing = false; clearInterval(metricsTimer); watcher?.close()
+    let cleaned = false
+    try { cleaned = resident ? await resident.stop() : true }
+    catch { process.exitCode = 1 }
+    finally {
+      await writes
       process.off('SIGINT', stop); process.off('SIGTERM', stop)
-      // Cleanup must not replace a failure's terminal status and diagnostic code.
-      if (runtime && !failed) await state('stopped')
+      if (resident && !failed) await state('stopped', { port, cleanup: cleaned })
     }
   }
 }

@@ -25,32 +25,36 @@ function composerFlow(node: HTMLElement, reserve = 56): boolean {
   const view = node.ownerDocument.defaultView!
   let flow = node.parentElement
   for (let depth = 0; flow && view.getComputedStyle(flow).display === 'contents' && depth < 8; depth++) {
-    if (flow.children.length !== 1) return false
+    if ([...flow.children].filter(el => !el.matches('[data-cui-slot]')).length !== 1) return false
     flow = flow.parentElement
   }
-  const footer = node.closest<HTMLElement>('[data-thread-scroll-footer="true"]')
-  if (!flow || !footer || !node.closest('[data-thread-find-composer="true"]')) return false
+  if (!flow) return false
   const style = view.getComputedStyle(flow)
-  const area = footer.parentElement?.getBoundingClientRect()
-  return style.display === 'flex' && style.flexDirection === 'column'
+  if (style.display !== 'flex' || style.flexDirection !== 'column') return false
+  if (node.dataset.composerPlacement === 'home' && node.closest('[data-home-feed-composer="true"]'))
+    return node.getBoundingClientRect().top - reserve - 8 >= 80
+  const footer = node.closest<HTMLElement>('[data-thread-scroll-footer="true"]')
+  const area = footer?.parentElement?.getBoundingClientRect()
+  return !!footer && !!node.closest('[data-thread-find-composer="true"]')
     && footer.contains(flow) && !!area && node.getBoundingClientRect().top - reserve - 8 >= area.top + 80
 }
 
-// Landing-page composers share the editor root, but have no active thread footer.
+// Landing composers have no active thread context; never reserve space on new pages.
 export function isThreadComposer(node: HTMLElement): boolean {
   return !!node.closest('[data-thread-scroll-footer="true"]')
     && !!node.closest('[data-thread-find-composer="true"]')
 }
 
-export function inspectAnchor(doc: Document, kind: 'composer' | 'rail', reservedHeight?: number): AnchorResult {
-  const reserve = reservedHeight ?? 56
+export function inspectAnchor(doc: Document, kind: 'composer' | 'rail', reservedHeight?: number, mounted?: HTMLElement): AnchorResult {
+  const attached = !!mounted?.isConnected
+  const reserve = attached ? 0 : reservedHeight ?? 56
   const selector = kind === 'composer' ? '[data-codex-composer-root]' : 'nav[data-app-navigation-rail]'
   const nodes = [...doc.querySelectorAll<HTMLElement>(selector)].filter(visible)
   const result = (code: AnchorCode, target: HTMLElement | null = null): AnchorResult =>
     ({ kind, code, candidates: nodes.length, adapter: kind === 'composer' ? 'composer-root-v1' : 'navigation-rail-v1', target })
   if (nodes.length !== 1) return result(nodes.length ? 'ambiguity' : 'missing')
   const node = nodes[0]!
-  if ([...doc.querySelectorAll<HTMLElement>('[aria-modal="true"], [role="menu"], dialog[open]')].some(visible)) return result('overlay')
+  if (!attached && [...doc.querySelectorAll<HTMLElement>('[aria-modal="true"], [role="menu"], dialog[open]')].some(visible)) return result('overlay')
   const r = node.getBoundingClientRect(), view = doc.defaultView!
   if (r.left < 0 || r.top < 0 || r.right > view.innerWidth || r.bottom > view.innerHeight) return result('space')
   if (kind === 'composer') {
@@ -62,18 +66,19 @@ export function inspectAnchor(doc: Document, kind: 'composer' | 'rail', reserved
       : [...node.querySelectorAll<HTMLElement>('[contenteditable="true"][role="textbox"], textarea')]).filter(visible)
     if (editors.length !== 1 || !node.parentElement || node.closest('[contenteditable="true"]')) return result('structure')
     // Marker is a new sibling region; require visible free space below the existing native region.
-    const next = node.nextElementSibling?.getBoundingClientRect()
+    const sibling = node.nextElementSibling === mounted ? mounted.nextElementSibling : node.nextElementSibling
+    const next = sibling?.getBoundingClientRect()
     if (r.width < 180) return result('space')
     if (r.bottom + reserve + 4 > view.innerHeight || (next && next.top < r.bottom + reserve + 4)) {
       if (next || !composerFlow(node, reserve)) return result('space')
-      return { ...result('ready', node), adapter: 'composer-flow-v2' }
+      return { ...result('ready', node), adapter: node.dataset.composerPlacement === 'home' ? 'composer-home-flow-v1' : 'composer-flow-v2' }
     }
   } else {
     // Wide sidebars are not evidence of the narrow icon rail requested by the design.
     if (r.width < 40 || r.width > 100 || r.height < 180) return result('space')
     const bottom = Math.max(r.top, ...[...node.children].map(child => child.getBoundingClientRect().bottom))
     if (r.bottom - bottom < reserve + 4) {
-      if (!railFooter(node, reservedHeight ?? 120)) return result('space')
+      if (!attached && !railFooter(node, reservedHeight ?? 120)) return result('space')
       return { ...result('ready', node), adapter: 'navigation-rail-flex-v2' }
     }
   }
@@ -91,13 +96,13 @@ export function mountContent(result: AnchorResult, content: HTMLElement, height:
   return insert(result, content, height, overlap, rejected)
 }
 
-function insert(result: AnchorResult, content: HTMLElement | null, height: number, overlap = 0, rejected?: (checks: SlotChecks) => void): { root: HTMLElement; stop: () => void } | null {
+function insert(result: AnchorResult, content: HTMLElement | null, height: number, overlap = 0, rejected?: (checks: SlotChecks) => void): { root: HTMLElement; update: () => void; stop: () => void } | null {
   if (result.code !== 'ready' || !result.target) return null
   const target = result.target
   const doc = target.ownerDocument
   const original = target.getBoundingClientRect()
-  const flow = result.adapter === 'composer-flow-v2'
-  if (flow && !composerFlow(target, height)) return null
+  const flow = result.adapter === 'composer-flow-v2' || result.adapter === 'composer-home-flow-v1'
+  if (flow && !composerFlow(target, height - overlap)) return null
   const footer = result.adapter === 'navigation-rail-flex-v2' ? railFooter(target, height) : null
   if (result.adapter === 'navigation-rail-flex-v2' && !footer) return null
   const controls = [...doc.querySelectorAll<HTMLElement>('button, textarea, input, [contenteditable="true"]')]
@@ -136,10 +141,28 @@ function insert(result: AnchorResult, content: HTMLElement | null, height: numbe
   if (result.kind === 'composer') result.target.after(node)
   else if (footer) result.target.insertBefore(node, footer)
   else result.target.append(node)
-  if (overlap) {
-    const gap = Math.max(0, node.getBoundingClientRect().top - target.getBoundingClientRect().bottom)
-    node.style.marginBlockStart = `${-gap - overlap}px`
+  const update = () => {
+    if (result.kind === 'composer' && content) {
+      const edge = target.getBoundingClientRect()
+      // Home uses a transparent surface container; its body paints the actual lower curve.
+      const surfaces = [target, ...target.querySelectorAll<HTMLElement>('[data-composer-surface-variant],[data-composer-body]')]
+      const radius = Math.max(0, ...surfaces.flatMap(surface => {
+        const rect = surface.getBoundingClientRect()
+        const value = parseFloat(doc.defaultView!.getComputedStyle(surface).borderBottomLeftRadius)
+        return rect.width >= edge.width - 1 && Math.abs(rect.bottom - edge.bottom) <= 1 && Number.isFinite(value)
+          ? [Math.min(value, rect.height / 2)] : []
+      }))
+      const value = `${Number.isFinite(radius) ? Math.min(64, Math.max(overlap, radius)) : 24}px`
+      if (node.style.getPropertyValue('--cui-composer-radius') !== value) node.style.setProperty('--cui-composer-radius', value)
+    }
+    if (overlap) {
+      const margin = parseFloat(node.style.marginBlockStart || '0')
+      const gap = Math.max(0, node.getBoundingClientRect().top - target.getBoundingClientRect().bottom - margin)
+      const value = `${-gap - overlap}px`
+      if (node.style.marginBlockStart !== value) node.style.marginBlockStart = value
+    }
   }
+  update()
   // Geometry checks before insertion cannot prove the host's layout behavior. Roll back synchronously.
   const rect = node.getBoundingClientRect(), after = target.getBoundingClientRect()
   const view = doc.defaultView!
@@ -164,5 +187,5 @@ function insert(result: AnchorResult, content: HTMLElement | null, height: numbe
   if (checks.outsideViewport || checks.hostChanged || checks.escapedRail || checks.movedControls || checks.overlappingControls) {
     node.remove(); rejected?.(checks); return null
   }
-  return { root: node, stop: () => node.remove() }
+  return { root: node, update, stop: () => node.remove() }
 }

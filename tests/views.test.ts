@@ -41,7 +41,9 @@ test('数字与侧栏圆环共享舍入口径，告警使用原始阈值', () =>
   const five = s.doc.querySelector<HTMLButtonElement>('[data-cui-view=rail] [data-cui-window=fiveHour]')!
   expect(five.querySelector('.cui-percent')!.textContent).toBe('50%')
   expect(five.querySelector('.cui-progress')!.getAttribute('stroke-dasharray')).toBe('50 100')
-  expect(five.getAttribute('aria-label')).toContain('余量偏低')
+  expect(five.getAttribute('aria-label')).not.toMatch(/偏低|很低|即将用尽/)
+  expect(five.dataset.warning).toBe('false')
+  expect(five.dataset.usageLevel).toBe('normal')
   expect(five.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true')
   s.stop()
 })
@@ -179,4 +181,29 @@ test('额度为零时静态文字与详情显示已经用尽，侧栏数字及�
   expect(detail.textContent).not.toMatch(/即将用尽|剩余 0%/)
   expect(s.doc.querySelector('[data-cui-detail=weekly]')!.textContent).toContain('剩余 75%')
   s.stop()
+})
+
+test.each(['fiveHour', 'weekly'] as const)('%s统一阈值，跨区间恢复时清理旧告警并保留入口', kind => {
+  const s = setup()
+  try {
+    let trigger: HTMLButtonElement | null = null
+    for (const [value, level, alert] of [[30, 'normal', false], [29.99, 'low', false], [10, 'low', false], [9.99, 'critical', true], [0, 'critical', true], [null, 'normal', false], [50, 'normal', false]] as const) {
+      const model = usage()
+      const window = model[kind]!
+      window.remainingPercent = value
+      s.store.accept(s.store.revision, model, 1793928351)
+      s.views.forEach(v => v.update(s.store.snapshot))
+      const current = s.doc.querySelector<HTMLButtonElement>(`[data-cui-view=rail] [data-cui-window=${kind}]`)!
+      trigger ??= current
+      expect(current).toBe(trigger)
+      expect(current.dataset.usageLevel).toBe(level)
+      expect(current.dataset.warning).toBe(String(alert))
+      expect(current.title).toBe(value === null ? '额度未知' : value === 0 ? '已经用尽' : alert ? '即将用尽' : '')
+      current.click()
+      const text = s.doc.querySelector(`[data-cui-detail=${kind}]`)!.textContent!
+      expect(text.includes('即将用尽')).toBe(value !== null && value > 0 && value < 10)
+      expect(text).not.toMatch(/余量偏低|余量很低/)
+      s.popover.close()
+    }
+  } finally { s.stop() }
 })

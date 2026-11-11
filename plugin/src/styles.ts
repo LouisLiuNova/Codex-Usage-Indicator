@@ -1,8 +1,11 @@
 export const styles = `
-.cui-rings,.cui-popover{font-family:inherit;color:var(--color-token-text-primary,CanvasText);color-scheme:light dark;box-sizing:border-box}
+.cui-rings,.cui-popover{font-family:inherit;color:var(--color-token-text-primary,CanvasText);color-scheme:inherit;box-sizing:border-box}
 .cui-rings{display:flex;align-items:center;justify-content:center;gap:16px;flex-shrink:0;min-width:0}
 .cui-rail{flex-direction:column;gap:8px;width:100%}
-.cui-composer{width:100%;min-height:44px;justify-content:flex-end;padding:14px 16px 4px;gap:16px;opacity:.8;border:1px solid color-mix(in srgb,currentColor 14%,transparent);border-top-color:transparent;border-radius:12px;pointer-events:none;background:linear-gradient(to bottom,transparent 12px,var(--color-background-primary,var(--color-token-bg-primary,Canvas)) 12px)}
+[data-codex-composer-root]:has(+[data-cui-slot="composer"]){position:relative;z-index:1}
+[data-cui-slot="composer"]{position:relative;z-index:0}
+.cui-composer{position:relative;z-index:0;width:100%;min-height:44px;justify-content:flex-end;padding:14px 16px 4px;gap:16px;opacity:.8;border:0;border-radius:0 0 12px 12px;pointer-events:none}
+.cui-composer::before{content:"";position:absolute;z-index:-1;inset:calc(12px - var(--cui-composer-radius,24px)) 0 0;border:1px solid color-mix(in srgb,currentColor 14%,transparent);border-top:0;border-radius:0 0 12px 12px;background:var(--color-background-primary,var(--color-token-bg-primary,Canvas));pointer-events:none}
 .cui-composer .cui-value{flex-direction:row;gap:6px;min-height:20px;pointer-events:none}
 .cui-composer .cui-percent{font-size:11px;line-height:16px;white-space:nowrap}
 .cui-composer .cui-window-label{font-size:10px;line-height:16px;color:var(--color-token-text-secondary,GrayText)}
@@ -15,10 +18,16 @@ export const styles = `
 .cui-ring svg{width:100%;height:100%;transform:rotate(-90deg);grid-area:1/1}
 .cui-track{stroke:color-mix(in srgb,currentColor 12%,transparent)}
 .cui-progress{stroke:var(--cui-accent);stroke-linecap:round}
-.cui-fiveHour{--cui-accent:#0891b2}.cui-weekly{--cui-accent:#8b5cf6}
+/* NIPPON COLORS: SABIONANDO / SABIASAGI, FUJINEZUMI / SHION, CHOJIZOME, SUOH / NAKABENI. */
+.cui-rings{--cui-accent-low:#b07736;--cui-accent-critical:light-dark(#8e354a,#db4d6d)}
+.cui-fiveHour{--cui-accent:light-dark(#336774,#6699a1)}.cui-weekly{--cui-accent:light-dark(#6e75a4,#8f77b5)}
+.cui-rail .cui-trigger[data-usage-level=low]{--cui-accent:var(--cui-accent-low)}
+.cui-rail .cui-trigger[data-usage-level=critical]{--cui-accent:var(--cui-accent-critical)}
+.cui-rail .cui-trigger[data-usage-level=low] .cui-track{stroke:color-mix(in srgb,var(--cui-accent) 24%,transparent)}
+.cui-rail .cui-trigger[data-usage-level=critical] .cui-track{stroke:color-mix(in srgb,var(--cui-accent) 36%,transparent)}
 .cui-percent{grid-area:1/1;font-size:10px;line-height:1;font-weight:600;font-variant-numeric:tabular-nums}
 .cui-window-label{font-size:9px;line-height:12px;font-weight:600;letter-spacing:.04em}
-.cui-rail .cui-trigger[data-warning=true] .cui-window-label::after{content:' !';color:var(--color-token-text-warning,#b45309)}
+.cui-rail .cui-trigger[data-warning=true] .cui-window-label::after{content:' !';color:var(--cui-accent)}
 .cui-popover{position:fixed;inset:auto;top:0;left:0;width:300px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;z-index:1000;padding:16px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:16px;background:var(--color-token-bg-primary,Canvas);box-shadow:0 12px 40px #0003;font-size:12px;line-height:1.5}
 .cui-popover header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .cui-popover h2{font-size:14px;line-height:20px;font-weight:600;margin:0}

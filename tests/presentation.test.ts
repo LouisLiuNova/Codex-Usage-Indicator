@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { formatTime, warning, displayPercent, remainingText } from '../plugin/src/presentation'
-test.each([[50, ''], [49.9, '余量偏低'], [20, '余量偏低'], [19.9, '余量很低'], [10, '余量很低'], [9.9, '即将用尽'], [0.1, '即将用尽'], [0, '已经用尽'], [null, '额度未知']] as const)('阈值 %p 无小数断档', (value, label) => {
+import { formatTime, warning, displayPercent, remainingText, usageLevel } from '../plugin/src/presentation'
+test.each([[50, ''], [49.9, ''], [30, ''], [29.99, ''], [20, ''], [10, ''], [9.99, '即将用尽'], [0.1, '即将用尽'], [0, '已经用尽'], [null, '额度未知']] as const)('阈值 %p 无小数断档', (value, label) => {
   expect(warning(value)).toBe(label)
 })
 test('实际为零显示已经用尽，正数和未知保持原有含义', () => {
@@ -31,4 +31,8 @@ test('本地取得时间保留毫秒精度，显示仍为正常绝对时间', ()
 })
 test.each([NaN, Infinity, -Infinity, -0.1, 8_640_000_000_001])('无效时间 %p 仍显示未知', seconds => {
   expect(formatTime(seconds, 'Asia/Shanghai')).toBe('未知')
+})
+
+test.each([[100, 'normal'], [30, 'normal'], [29.99, 'low'], [10, 'low'], [9.99, 'critical'], [0, 'critical'], [null, 'normal']] as const)('圆环区间使用原始余量 %p', (value, level) => {
+  expect(usageLevel(value)).toBe(level)
 })

@@ -46,7 +46,10 @@ export function createMountLifecycleFixture(host: Document) {
         duplicate.hidden = true
         const aside = doc.createElement('aside'); aside.append(duplicate); doc.body.append(aside)
       },
-      revealDuplicate() { duplicate!.hidden = false; refresh() },
+      revealDuplicate() { duplicate!.hidden = false },
+      leaveThread() { doc.querySelector('main')!.removeAttribute('data-thread-scroll-footer') },
+      enterThread() { doc.querySelector('main')!.setAttribute('data-thread-scroll-footer', 'true') },
+      removeSlot() { doc.querySelector('[data-cui-slot=composer]')!.remove() },
       removeDuplicate() { duplicate!.remove() },
       stop
     }

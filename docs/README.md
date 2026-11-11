@@ -8,7 +8,8 @@
 | --- | --- |
 | [使用指南](使用指南.md) | 环境准备、构建加载、日常操作、停用与常见问题 |
 | [随包说明](../plugin/README.md) | 查看构建包内可独立阅读的功能和限制说明 |
-| [macOS 开发加载与实测](compatibility/macos-arm64.md) | macOS 加载参数、一次性模式及实机边界 |
+| [常驻注入与开销](compatibility/resident-injection.md) | 当前 macOS 常驻方案、参数及资源观察 |
+| [macOS 历史实测](compatibility/macos-arm64.md) | 历史加载实验及对应实机边界 |
 | [探针说明](../tools/probes/README.md) | 诊断数据读取和挂载能力；并非普通使用流程 |
 
 ## 当前规则与验收

@@ -194,3 +194,57 @@ test('缺少锚点时不占位，普通消息更新不扫描，窗口变化重�
     runtime.stop()
   } finally { s.win.close() }
 })
+
+function accountMenu(s: ReturnType<typeof setup>) {
+  s.doc.body.innerHTML = '<nav data-app-navigation-rail><div></div><div><button aria-haspopup="menu" aria-expanded="false" aria-label="profile"></button></div></nav>'
+  for (const child of s.doc.querySelector('nav')!.children) child.getBoundingClientRect = () => ({ width: 40 }) as DOMRect
+  const button = s.doc.querySelector<HTMLButtonElement>('button')!, menu = s.doc.createElement('div')
+  menu.setAttribute('role', 'menu'); menu.getBoundingClientRect = () => ({ width: 100, height: 100 }) as DOMRect
+  return {
+    open() {
+      button.dispatchEvent(new s.win.PointerEvent('pointerdown', { bubbles: true }) as unknown as PointerEvent)
+      button.setAttribute('aria-expanded', 'true'); s.doc.body.append(menu)
+    },
+    close() { button.setAttribute('aria-expanded', 'false'); menu.remove() }
+  }
+}
+test('账号菜单关闭后自动重验并恢复轮询，不需要切走窗口；菜单打开时focus/online不越过暂停', async () => {
+  const s = setup(), menu = accountMenu(s)
+  try {
+    const runtime = createRuntime(s.doc, { clock: s.clock, read: async () => usage() })
+    await flush(); menu.open(); await flush()
+    expect(runtime.inspect()).toMatchObject({ requests: 1, contextPaused: true, connection: 'connecting', coverage: 'none' })
+    s.win.dispatchEvent(new s.win.Event('focus')); s.win.dispatchEvent(new s.win.Event('online'))
+    await flush()
+    expect(runtime.inspect()).toMatchObject({ requests: 1, contextPaused: true })
+    menu.close(); await pause(850); await flush()
+    expect(runtime.inspect()).toMatchObject({ requests: 2, contextPaused: false, connection: 'connected', status: 'ready' })
+    await s.clock.advance(30_000)
+    expect(runtime.inspect().requests).toBe(3)
+    runtime.stop()
+  } finally { s.win.close() }
+})
+test('停止时取消账号菜单关闭的迟到恢复', async () => {
+  const s = setup(), menu = accountMenu(s)
+  try {
+    const runtime = createRuntime(s.doc, { clock: s.clock, read: async () => usage() })
+    await flush(); menu.open(); await flush(); menu.close(); await flush()
+    runtime.stop(); await pause(850)
+    expect(runtime.inspect()).toMatchObject({ active: false, requests: 1 })
+    expect(s.clock.tasks.size).toBe(0)
+  } finally { s.win.close() }
+})
+test('菜单观察器故障仍先清空旧账号数据，并保留前台恢复入口', async () => {
+  const s = setup(), menu = accountMenu(s), host = s.win as unknown as { MutationObserver: typeof MutationObserver }
+  const Observer = host.MutationObserver
+  try {
+    const runtime = createRuntime(s.doc, { clock: s.clock, read: async () => usage() })
+    await flush()
+    host.MutationObserver = class extends Observer { override observe() { throw new Error('test-menu-watch') } }
+    menu.open(); menu.close(); host.MutationObserver = Observer
+    expect(runtime.inspect()).toMatchObject({ contextPaused: true, coverage: 'none' })
+    s.win.dispatchEvent(new s.win.Event('focus')); await pause(260); await flush()
+    expect(runtime.inspect()).toMatchObject({ contextPaused: false, status: 'ready', requests: 2 })
+    runtime.stop()
+  } finally { host.MutationObserver = Observer; s.win.close() }
+})
